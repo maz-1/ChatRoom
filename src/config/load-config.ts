@@ -53,6 +53,29 @@ function rawConfigSchema() {
         })
         .strict()
         .default(defaults.auth),
+      http: z
+        .object({
+          defaultTimeoutMs: z
+            .number()
+            .int()
+            .min(1000)
+            .max(24 * 60 * 60 * 1000)
+            .default(defaults.http.defaultTimeoutMs),
+          maxTimeoutMs: z
+            .number()
+            .int()
+            .min(1000)
+            .max(24 * 60 * 60 * 1000)
+            .default(defaults.http.maxTimeoutMs),
+          maxResponseBytes: z
+            .number()
+            .int()
+            .min(4096)
+            .max(16 * 1024 * 1024)
+            .default(defaults.http.maxResponseBytes),
+        })
+        .strict()
+        .default(defaults.http),
       operations: z
         .object({
           maxPayloadBytes: z
@@ -108,6 +131,11 @@ export function defaultConfig(): ChatRoomConfig {
       mcpPublicBaseUrl: null,
       webPublicBaseUrl: null,
       allowedRedirectHosts: ["chatgpt.com", "localhost", "127.0.0.1"],
+    },
+    http: {
+      defaultTimeoutMs: 30_000,
+      maxTimeoutMs: 120_000,
+      maxResponseBytes: 1024 * 1024,
     },
     operations: { maxPayloadBytes: 512 * 1024 },
     process: {

@@ -8,7 +8,7 @@
   <a href="../README.md">English</a> | 简体中文 | <a href="https://doc.chatroomcp.com/zh/">文档</a>
 </p>
 
-ChatRoom 是一个本地 MCP Runtime，让 ChatGPT 可以处理本地设备上的项目，运行进程或执行电脑控制。WebUI 用于浏览工作区、管理 Git 仓库和进程、使用电脑控制、管理 ChatRoom Cloud，并按插件查看操作日志。
+ChatRoom 是一个本地 MCP Runtime，让 ChatGPT 可以处理本地设备上的项目，运行进程、直接发送 HTTP/HTTPS 请求或执行电脑控制。WebUI 用于浏览工作区、管理 Git 仓库和进程、使用电脑控制、管理 ChatRoom Cloud，并按插件查看操作日志。
 
 ## 安装
 
@@ -19,6 +19,7 @@ npm install -g @chatroomcp/chatroom
 chatroom init
 chatroom serve
 ```
+
 Windows用户也可以使用[ChatRoom-Windows-Portable](https://github.com/dayearnew/ChatRoom-Windows-Portable)，无需自行配置任何依赖。
 
 默认本地地址：

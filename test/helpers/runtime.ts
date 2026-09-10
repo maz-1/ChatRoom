@@ -41,6 +41,11 @@ export async function createTestRuntime(
       webPublicBaseUrl: null,
       allowedRedirectHosts: ["localhost", "127.0.0.1"],
     },
+    http: {
+      defaultTimeoutMs: 5_000,
+      maxTimeoutMs: 10_000,
+      maxResponseBytes: 16 * 1024,
+    },
     operations: { maxPayloadBytes: 16 * 1024 },
     process: {
       maxOutputBytes: options.maxOutputBytes ?? 16 * 1024,

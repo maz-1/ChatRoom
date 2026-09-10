@@ -13,6 +13,11 @@
     "webPublicBaseUrl": null,
     "allowedRedirectHosts": ["chatgpt.com", "localhost", "127.0.0.1"]
   },
+  "http": {
+    "defaultTimeoutMs": 30000,
+    "maxTimeoutMs": 120000,
+    "maxResponseBytes": 1048576
+  },
   "operations": {
     "maxPayloadBytes": 524288
   },

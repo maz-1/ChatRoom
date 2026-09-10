@@ -13,6 +13,11 @@ export interface ChatRoomConfig {
     webPublicBaseUrl: string | null;
     allowedRedirectHosts: string[];
   };
+  http: {
+    defaultTimeoutMs: number;
+    maxTimeoutMs: number;
+    maxResponseBytes: number;
+  };
   operations: {
     maxPayloadBytes: number;
   };

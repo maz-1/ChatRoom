@@ -8,7 +8,7 @@
   English | <a href="./docs/README.zh-CN.md">简体中文</a> | <a href="https://doc.chatroomcp.com/">Documentation</a>
 </p>
 
-ChatRoom is a local MCP runtime that lets ChatGPT work with projects on your local device, run processes, or perform computer control. Its WebUI provides workspace browsing, Git repository and process management, computer control, ChatRoom Cloud management, and plugin-attributed operation logs.
+ChatRoom is a local MCP runtime that lets ChatGPT work with projects on your local device, run processes, send direct HTTP/HTTPS requests, or perform computer control. Its WebUI provides workspace browsing, Git repository and process management, computer control, ChatRoom Cloud management, and plugin-attributed operation logs.
 
 ## Install
 
