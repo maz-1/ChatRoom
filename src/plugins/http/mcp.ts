@@ -12,7 +12,7 @@ export function registerHttpTools(
     {
       title: "Send HTTP request",
       description:
-        'Send a direct HTTP/HTTPS request from the user\'s machine and return the status, headers, and a size-bounded body. Use it to call web APIs, download pages, or reach local services. Provide custom headers (e.g. authorization, content-type) as needed; send JSON as a text body with a content-type header, and binary payloads as standard base64 with bodyEncoding "base64". Redirects are followed automatically and the final URL is reported. Responses larger than the configured limit are truncated with truncated set to true; binary responses are returned as base64 unless responseFormat selects text, base64, or omit (headers/status only).',
+        'Send a direct HTTP/HTTPS request from the user\'s machine and return the status, headers, and a size-bounded body. Use it to call web APIs, download pages, or reach local services. Provide custom headers (e.g. authorization, content-type) as needed; send JSON as a text body with a content-type header, and binary payloads as standard base64 with bodyEncoding "base64". Redirects are followed automatically and the final URL is reported. The response body limit defaults to 1 MiB (1,048,576 bytes), measured before base64 encoding, and is configurable via http.maxResponseBytes up to 16 MiB. Responses larger than this limit are truncated with truncated set to true and are incomplete downloads; binary responses are returned as base64 unless responseFormat selects text, base64, or omit (headers/status only).',
       inputSchema: httpRequestSchema,
       outputSchema: httpRequestResultSchema,
       annotations: openWorldMutation,
