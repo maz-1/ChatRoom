@@ -83,3 +83,8 @@ export type McpToolSummary = z.infer<typeof toolSummarySchema>;
 export type McpServerSummary = z.infer<typeof serverSummarySchema>;
 export type McpCallInput = z.infer<typeof mcpCallInputSchema>;
 export type McpCallOutput = z.infer<typeof mcpCallOutputSchema>;
+
+/** WebUI projection of a configured server, including stdio diagnostics. */
+export interface McpServerDetail extends McpServerSummary {
+  stderrTail: string;
+}

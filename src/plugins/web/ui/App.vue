@@ -15,8 +15,15 @@ import WorkspacesView from "./components/WorkspacesView.vue";
 import ProcessesView from "./components/ProcessesView.vue";
 import CloudView from "./components/CloudView.vue";
 import ComputerView from "./components/ComputerView.vue";
+import McpServersView from "./components/McpServersView.vue";
 
-type View = "workspaces" | "processes" | "computer" | "cloud" | "operations";
+type View =
+  | "workspaces"
+  | "processes"
+  | "computer"
+  | "mcp-servers"
+  | "cloud"
+  | "operations";
 type ThemeMode = "system" | "light" | "dark";
 type RegistrationOptionsJSON = Parameters<
   typeof startRegistration
@@ -53,6 +60,11 @@ const nav = [
   { id: "workspaces", titleKey: "nav.workspaces", icon: "mdi-folder-outline" },
   { id: "processes", titleKey: "nav.processes", icon: "mdi-console-line" },
   { id: "computer", titleKey: "nav.computer", icon: "mdi-monitor" },
+  {
+    id: "mcp-servers",
+    titleKey: "nav.mcp",
+    icon: "mdi-server-network",
+  },
   { id: "cloud", titleKey: "nav.cloud", icon: "mdi-cloud-outline" },
   {
     id: "operations",
@@ -97,6 +109,7 @@ const currentComponent = computed(
       workspaces: WorkspacesView,
       processes: ProcessesView,
       computer: ComputerView,
+      "mcp-servers": McpServersView,
       cloud: CloudView,
       operations: OperationsView,
     })[view.value],
@@ -292,6 +305,8 @@ function viewFromPath(): View {
       return "processes";
     case "/computer":
       return "computer";
+    case "/mcp-servers":
+      return "mcp-servers";
     case "/cloud":
       return "cloud";
     case "/operations":

@@ -17,9 +17,11 @@ import {
 } from "../../core/runtime/identity.js";
 import { createProxyDispatcher } from "../../core/runtime/proxy-dispatcher.js";
 import { fetch as undiciFetch, type Dispatcher } from "undici";
+import type { RuntimeEventBus } from "../../app/event-bus.js";
 import type {
   McpCallInput,
   McpCallOutput,
+  McpServerDetail,
   McpServerSummary,
   McpToolSummary,
 } from "./types.js";
@@ -42,7 +44,10 @@ interface ServerState {
 export class McpProxyService {
   private readonly servers = new Map<string, ServerState>();
 
-  constructor(private readonly config: McpConfig) {
+  constructor(
+    private readonly config: McpConfig,
+    private readonly events: RuntimeEventBus,
+  ) {
     for (const [name, serverConfig] of Object.entries(config.servers))
       this.servers.set(name, {
         name,
@@ -115,6 +120,24 @@ export class McpProxyService {
       content: bounded.content,
       structuredContent: asRecord(result.structuredContent),
       truncated: bounded.truncated,
+    };
+  }
+
+  /**
+   * WebUI projection: like {@link list} but also reports the captured stdio
+   * stderr tail. Never returns configured env values or HTTP headers.
+   */
+  async inspect(
+    serverName?: string | undefined,
+  ): Promise<{ servers: McpServerDetail[] }> {
+    const targets = this.resolve(serverName);
+    return {
+      servers: await Promise.all(
+        targets.map(async (state) => ({
+          ...(await this.describe(state, true)),
+          stderrTail: state.stderrTail.trim(),
+        })),
+      ),
     };
   }
 
@@ -191,6 +214,7 @@ export class McpProxyService {
       state.tools = await this.listTools(client);
       state.status = "connected";
       state.error = null;
+      this.events.emit({ type: "mcp-servers" });
     } catch (error) {
       await client.close().catch(() => undefined);
       await this.destroyDispatcher(state);
@@ -248,11 +272,13 @@ export class McpProxyService {
 
   private invalidate(state: ServerState, reason: string | null): void {
     if (state.closing) return;
-    if (!state.client) return;
+    // Records the failure reason even when no client was ever established, so
+    // a server that cannot be reached reports why instead of an empty error.
     state.client = null;
     state.tools = null;
     state.status = "error";
     state.error = reason ?? "Connection closed";
+    this.events.emit({ type: "mcp-servers" });
   }
 
   private unavailable(state: ServerState, cause: unknown): ChatRoomError {

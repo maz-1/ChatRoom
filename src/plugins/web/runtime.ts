@@ -1,6 +1,7 @@
 import type { OperationLog } from "../../operations/operation-log.js";
 import type { ComputerService } from "../computer/computer-service.js";
 import type { GitService } from "../git/git-service.js";
+import type { McpProxyService } from "../mcp-proxy/mcp-proxy-service.js";
 import type { ProcessSupervisor } from "../process/process-supervisor.js";
 import type { WorkspaceService } from "../workspace/workspace-service.js";
 
@@ -11,6 +12,7 @@ export class WebRuntime {
     readonly operations: OperationLog,
     readonly processes: ProcessSupervisor,
     readonly computer: ComputerService,
+    readonly mcpProxy: McpProxyService,
   ) {}
 
   processKill(processId: string, force = false) {

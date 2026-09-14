@@ -20,6 +20,8 @@ import type { IngressPolicy } from "../../../auth/ingress-policy.js";
 import type { CloudController } from "../../cloud/controller.js";
 import { createCloudApiRouter } from "./cloud-api-router.js";
 import { createComputerApiRouter } from "./computer-api-router.js";
+import { createMcpApiRouter } from "./mcp-api-router.js";
+import { defaultConfigPath } from "../../../config/load-config.js";
 
 const SESSION_COOKIE = "chatroom_session";
 
@@ -170,6 +172,13 @@ export function createApiRouter(
     ),
   );
   router.use(createCloudApiRouter(cloud, application.operations));
+  router.use(
+    createMcpApiRouter(
+      application.mcpProxy,
+      application.operations,
+      defaultConfigPath,
+    ),
+  );
   router.get("/events", (req, res) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream");

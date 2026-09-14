@@ -2,6 +2,7 @@ import type { InternalPlugin } from "../types.js";
 import { createServiceToken } from "../types.js";
 import { ComputerServiceToken } from "../computer/plugin.js";
 import { GitServiceToken } from "../git/plugin.js";
+import { McpProxyServiceToken } from "../mcp-proxy/plugin.js";
 import { ProcessService } from "../process/plugin.js";
 import { WorkspaceServiceToken } from "../workspace/plugin.js";
 import { WebRuntime } from "./runtime.js";
@@ -22,6 +23,7 @@ export function createWebPlugin(): InternalPlugin {
           context.operations,
           context.services.require(ProcessService),
           context.services.require(ComputerServiceToken),
+          context.services.require(McpProxyServiceToken),
         ),
       });
     },

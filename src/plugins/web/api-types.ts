@@ -7,6 +7,7 @@ import type {
   GitStatus,
 } from "../git/types.js";
 import type { ProcessSnapshot } from "../process/types.js";
+import type { McpServerDetail, McpToolSummary } from "../mcp-proxy/types.js";
 import type {
   ComputerDisplay,
   ComputerPermission,
@@ -29,6 +30,8 @@ export type {
   GitCommit,
   GitDiff,
   GitStatus,
+  McpServerDetail,
+  McpToolSummary,
   ProcessSnapshot,
   WorkspaceEntry,
   WorkspaceFile,
@@ -48,3 +51,9 @@ export interface ComputerPreviewView {
 }
 
 export type Operation = DomainOperation;
+
+/** Read-only MCP server surface: definitions live in the config file. */
+export interface McpServersView {
+  configPath: string;
+  servers: McpServerDetail[];
+}

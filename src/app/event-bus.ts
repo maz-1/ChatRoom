@@ -8,6 +8,7 @@ export type RuntimeEvent =
   | { type: "operations-cleared"; deleted: number; preserved: number }
   | { type: "process"; process: ProcessSnapshot }
   | { type: "computer-settings"; settings: ComputerSettings }
+  | { type: "mcp-servers" }
   | { type: "process-output"; processId: string };
 
 export class RuntimeEventBus {

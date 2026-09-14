@@ -108,6 +108,12 @@ test("mcp proxy discovers and calls upstream tools over stdio and http", async (
           headers: {},
           proxy: null,
         },
+        unreachable: {
+          type: "http",
+          url: "http://127.0.0.1:1/mcp",
+          headers: {},
+          proxy: null,
+        },
       };
     },
   });
@@ -148,14 +154,20 @@ test("mcp proxy discovers and calls upstream tools over stdio and http", async (
       }[];
     };
     const byName = new Map(summary.servers.map((s) => [s.name, s]));
-    assert.equal(summary.servers.length, 2);
+    assert.equal(summary.servers.length, 3);
     const local = byName.get("local");
     const remote = byName.get("remote");
-    assert.ok(local && remote);
+    const unreachable = byName.get("unreachable");
+    assert.ok(local && remote && unreachable);
     assert.equal(local.status, "connected", local.error ?? "");
     assert.equal(local.type, "stdio");
     assert.equal(remote.status, "connected", remote.error ?? "");
     assert.equal(remote.type, "http");
+    assert.equal(unreachable.status, "error");
+    assert.ok(
+      unreachable.error,
+      "an unreachable server must report why it failed",
+    );
     const localTools = local.tools.map((tool) => tool.name).sort();
     assert.deepEqual(localTools, ["echo", "fail", "flood", "palette"]);
     assert.ok(
@@ -243,7 +255,7 @@ test("mcp proxy discovers and calls upstream tools over stdio and http", async (
     assert.deepEqual(
       (unknownServerError.details as { availableServers: string[] })
         .availableServers,
-      ["local", "remote"],
+      ["local", "remote", "unreachable"],
     );
 
     const unknownTool = await client.callTool({

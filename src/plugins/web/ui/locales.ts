@@ -9,6 +9,7 @@ const enChatRoom = {
     processes: "Processes",
     computer: "Computer",
     cloud: "Cloud",
+    mcp: "MCP servers",
   },
   computer: {
     title: "Computer Use",
@@ -275,6 +276,31 @@ const enChatRoom = {
     replaceRecoveryKey: "Replace recovery key",
     setCloudService: "Set Cloud service",
   },
+  mcp: {
+    title: "MCP servers",
+    subtitle: "Servers proxied through ChatRoom and the tools they expose",
+    server: "Server",
+    transport: "Transport",
+    status: "Status",
+    tools: "Tools",
+    reconnect: "Reconnect",
+    reconnectAll: "Reconnect all",
+    summary: "{0} of {1} connected",
+    select: "Select a server to inspect its tools.",
+    empty: "No MCP servers are configured.",
+    noTools: "This server exposes no tools.",
+    stderr: "Server stderr",
+    addTitle: "Add a server",
+    addSubtitle: "Definitions live in the ChatRoom configuration file",
+    addBody:
+      "Add an entry under mcp.servers in the configuration file below. Credentials passed through env or headers stay on this device and are never shown here.",
+    addNotice:
+      "Configuration is read at startup: restart ChatRoom after editing.",
+    statuses: {
+      connected: "Connected",
+      error: "Unavailable",
+    },
+  },
 };
 
 const zhChatRoom: typeof enChatRoom = {
@@ -284,6 +310,7 @@ const zhChatRoom: typeof enChatRoom = {
     processes: "进程",
     computer: "电脑控制",
     cloud: "Cloud",
+    mcp: "MCP 服务",
   },
   computer: {
     title: "电脑控制",
@@ -546,6 +573,30 @@ const zhChatRoom: typeof enChatRoom = {
     restoreCloud: "恢复 Cloud 订阅",
     replaceRecoveryKey: "更换恢复密钥",
     setCloudService: "设置 Cloud 服务",
+  },
+  mcp: {
+    title: "MCP 服务",
+    subtitle: "经 ChatRoom 代理的服务及其对外暴露的工具",
+    server: "服务",
+    transport: "传输方式",
+    status: "状态",
+    tools: "工具",
+    reconnect: "重新连接",
+    reconnectAll: "全部重连",
+    summary: "{0} / {1} 已连接",
+    select: "选择左侧的一个服务以查看它的工具。",
+    empty: "尚未配置任何 MCP 服务。",
+    noTools: "该服务没有暴露任何工具。",
+    stderr: "服务 stderr 输出",
+    addTitle: "添加服务",
+    addSubtitle: "服务定义位于 ChatRoom 配置文件中",
+    addBody:
+      "在下方配置文件的 mcp.servers 中新增一项。通过 env 或 headers 传入的凭据只留在本机，不会显示在此页面。",
+    addNotice: "配置仅在启动时读取：修改后需重启 ChatRoom。",
+    statuses: {
+      connected: "已连接",
+      error: "不可用",
+    },
   },
 };
 

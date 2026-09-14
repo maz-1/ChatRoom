@@ -157,7 +157,7 @@ function rawConfigSchema() {
     .strict();
 }
 
-function defaultConfigPath(): string {
+export function defaultConfigPath(): string {
   return process.env.CHATROOM_CONFIG ?? platformPaths().configFile;
 }
 

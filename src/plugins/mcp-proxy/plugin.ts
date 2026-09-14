@@ -12,7 +12,7 @@ export function createMcpProxyPlugin(): InternalPlugin {
   return {
     id: "mcp-proxy",
     activate(context) {
-      service = new McpProxyService(context.config.mcp);
+      service = new McpProxyService(context.config.mcp, context.events);
       context.services.provide(McpProxyServiceToken, service);
     },
     registerMcp(mcp) {
