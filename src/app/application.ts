@@ -18,6 +18,10 @@ import {
   ProcessService,
 } from "../plugins/process/plugin.js";
 import { createHttpPlugin, HttpFetcherToken } from "../plugins/http/plugin.js";
+import {
+  createMcpProxyPlugin,
+  McpProxyServiceToken,
+} from "../plugins/mcp-proxy/plugin.js";
 import { createCloudPlugin, CloudService } from "../plugins/cloud/plugin.js";
 import {
   createComputerPlugin,
@@ -35,6 +39,7 @@ export interface ApplicationComponents {
   application: import("../plugins/web/runtime.js").WebRuntime;
   processes: import("../plugins/process/process-supervisor.js").ProcessSupervisor;
   fetcher: import("../plugins/http/http-fetcher.js").HttpFetcher;
+  mcpProxy: import("../plugins/mcp-proxy/mcp-proxy-service.js").McpProxyService;
   cloud: import("../plugins/cloud/controller.js").CloudController;
   computer: import("../plugins/computer/computer-service.js").ComputerService;
   http: HttpServer;
@@ -74,6 +79,7 @@ export async function createApplication(
         createGitPlugin(),
         createProcessPlugin(),
         createHttpPlugin(),
+        createMcpProxyPlugin(),
         createComputerPlugin(),
         createCloudPlugin(),
         createWebPlugin(),
@@ -83,6 +89,7 @@ export async function createApplication(
     const web = services.require(WebServiceToken);
     const processes = services.require(ProcessService);
     const fetcher = services.require(HttpFetcherToken);
+    const mcpProxy = services.require(McpProxyServiceToken);
     const cloud = services.require(CloudService);
     const computer = services.require(ComputerServiceToken);
     const mcp = createChatRoomMcpHandler(plugins);
@@ -104,6 +111,7 @@ export async function createApplication(
       application: web.application,
       processes,
       fetcher,
+      mcpProxy,
       cloud,
       computer,
       http,

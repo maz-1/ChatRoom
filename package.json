@@ -29,6 +29,7 @@
     "clean:all": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@simplewebauthn/server": "13.3.2",
@@ -42,7 +43,6 @@
   },
   "devDependencies": {
     "@mdi/font": "^7.4.47",
-    "@modelcontextprotocol/client": "^2.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@types/express": "^5.0.3",
     "@types/node": "^24.2.1",
@@ -78,5 +78,9 @@
     "dist",
     "assets",
     "chatroom.config.example.json"
-  ]
+  ],
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "node-pty@1.1.0": true
+  }
 }

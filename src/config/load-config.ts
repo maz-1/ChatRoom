@@ -7,6 +7,8 @@ import { ChatRoomError } from "../core/errors/chatroom-error.js";
 import { platformPaths } from "./platform-paths.js";
 import type { ChatRoomConfig } from "./types.js";
 
+const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
 function rawConfigSchema() {
   const defaults = defaultConfig();
   return z
@@ -87,6 +89,47 @@ function rawConfigSchema() {
         })
         .strict()
         .default(defaults.operations),
+      mcp: z
+        .object({
+          callTimeoutMs: z
+            .number()
+            .int()
+            .min(1000)
+            .max(24 * 60 * 60 * 1000)
+            .default(defaults.mcp.callTimeoutMs),
+          maxResultBytes: z
+            .number()
+            .int()
+            .min(4096)
+            .max(64 * 1024 * 1024)
+            .default(defaults.mcp.maxResultBytes),
+          servers: z
+            .record(
+              z.string().regex(MCP_SERVER_NAME_PATTERN),
+              z.discriminatedUnion("type", [
+                z
+                  .object({
+                    type: z.literal("stdio"),
+                    command: z.string().min(1),
+                    args: z.array(z.string()).default([]),
+                    env: z.record(z.string(), z.string()).default({}),
+                    cwd: z.string().min(1).nullable().default(null),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    type: z.literal("http"),
+                    url: z.string().url(),
+                    headers: z.record(z.string(), z.string()).default({}),
+                    proxy: z.string().min(1).nullable().default(null),
+                  })
+                  .strict(),
+              ]),
+            )
+            .default({}),
+        })
+        .strict()
+        .default(defaults.mcp),
       process: z
         .object({
           maxOutputBytes: z
@@ -138,6 +181,11 @@ export function defaultConfig(): ChatRoomConfig {
       maxResponseBytes: 1024 * 1024,
     },
     operations: { maxPayloadBytes: 512 * 1024 },
+    mcp: {
+      callTimeoutMs: 60_000,
+      maxResultBytes: 1024 * 1024,
+      servers: {},
+    },
     process: {
       maxOutputBytes: 512 * 1024,
       defaultTimeoutMs: 30 * 60 * 1000,
@@ -198,6 +246,7 @@ export async function initializeConfig(): Promise<{
 }
 
 function validateConfig(value: unknown): ChatRoomConfig {
+  assertSupportedMcpTransports(value);
   const result = rawConfigSchema().safeParse(value);
   if (!result.success)
     throw new ChatRoomError("INVALID_INPUT", "Invalid ChatRoom configuration", {
@@ -216,6 +265,31 @@ function validateConfig(value: unknown): ChatRoomConfig {
       result.data.databasePath ?? path.join(dataDir, "chatroom.sqlite"),
     ),
   };
+}
+
+function assertSupportedMcpTransports(value: unknown): void {
+  const servers = serverEntries(value);
+  for (const [name, entry] of Object.entries(servers)) {
+    if (
+      entry &&
+      typeof entry === "object" &&
+      (entry as { type?: unknown }).type === "sse"
+    )
+      throw new ChatRoomError(
+        "UNSUPPORTED",
+        `MCP server "${name}" uses the legacy "sse" transport, which ChatRoom does not support yet; configure it as "http" (Streamable HTTP) instead`,
+      );
+  }
+}
+
+function serverEntries(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object") return {};
+  const servers = (value as { mcp?: unknown }).mcp;
+  if (!servers || typeof servers !== "object") return {};
+  const entries = (servers as { servers?: unknown }).servers;
+  if (!entries || typeof entries !== "object" || Array.isArray(entries))
+    return {};
+  return entries as Record<string, unknown>;
 }
 
 function validateRuntimeSecurity(config: ChatRoomConfig): void {

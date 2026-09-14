@@ -21,6 +21,26 @@
   "operations": {
     "maxPayloadBytes": 524288
   },
+  "mcp": {
+    "callTimeoutMs": 60000,
+    "maxResultBytes": 1048576,
+    "servers": {
+      "filesystem": {
+        "type": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "/home/user/Projects"
+        ]
+      },
+      "remote": {
+        "type": "http",
+        "url": "https://mcp.example.com/mcp",
+        "headers": { "authorization": "Bearer replace-me" }
+      }
+    }
+  },
   "process": {
     "maxOutputBytes": 524288,
     "defaultTimeoutMs": 1800000,

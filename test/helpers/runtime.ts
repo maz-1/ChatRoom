@@ -47,6 +47,11 @@ export async function createTestRuntime(
       maxResponseBytes: 16 * 1024,
     },
     operations: { maxPayloadBytes: 16 * 1024 },
+    mcp: {
+      callTimeoutMs: 5_000,
+      maxResultBytes: 16 * 1024,
+      servers: {},
+    },
     process: {
       maxOutputBytes: options.maxOutputBytes ?? 16 * 1024,
       defaultTimeoutMs: 10_000,

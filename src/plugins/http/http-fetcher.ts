@@ -1,9 +1,8 @@
 import { ChatRoomError } from "../../core/errors/chatroom-error.js";
+import { createProxyDispatcher } from "../../core/runtime/proxy-dispatcher.js";
 import type { HttpRequestInput, HttpResponse } from "./types.js";
 import {
   fetch,
-  ProxyAgent,
-  Socks5ProxyAgent,
   type Dispatcher,
   type RequestInit,
   type Response,
@@ -37,7 +36,7 @@ export class HttpFetcher {
     const dispatcher =
       input.proxy === undefined
         ? undefined
-        : createProxy(input.proxy, timeoutMs);
+        : createProxyDispatcher(input.proxy, timeoutMs);
     try {
       const options: RequestInit & { dispatcher?: Dispatcher } = {
         method: input.method,
@@ -61,40 +60,6 @@ export class HttpFetcher {
       await dispatcher?.destroy();
     }
   }
-}
-
-function createProxy(raw: string, timeoutMs: number): Dispatcher {
-  let proxy: URL;
-  try {
-    proxy = new URL(raw);
-  } catch {
-    throw new ChatRoomError("INVALID_INPUT", "Invalid proxy URL");
-  }
-  if (!["http:", "https:", "socks5:"].includes(proxy.protocol))
-    throw new ChatRoomError(
-      "UNSUPPORTED",
-      "Only http, https, and socks5 proxies are supported",
-    );
-  if (proxy.username || proxy.password)
-    throw new ChatRoomError(
-      "INVALID_INPUT",
-      "Proxy authentication is not supported",
-    );
-  if (
-    !proxy.hostname ||
-    (proxy.pathname !== "" && proxy.pathname !== "/") ||
-    proxy.search ||
-    proxy.hash
-  )
-    throw new ChatRoomError(
-      "INVALID_INPUT",
-      "Proxy URL must contain only a host and optional port",
-    );
-  if (proxy.port && (Number(proxy.port) < 1 || Number(proxy.port) > 65535))
-    throw new ChatRoomError("INVALID_INPUT", "Invalid proxy port");
-  return proxy.protocol === "socks5:"
-    ? new Socks5ProxyAgent(proxy, { connectTimeout: timeoutMs })
-    : new ProxyAgent({ uri: proxy.toString(), connectTimeout: timeoutMs });
 }
 
 function parseTargetUrl(raw: string): URL {
