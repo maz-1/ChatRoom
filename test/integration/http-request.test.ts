@@ -52,6 +52,11 @@ test("http_request tool serves direct HTTP requests with audited operations", as
       tools.tools.some((tool) => tool.name === "http_request"),
       "http_request should be listed",
     );
+    assert.ok(
+      tools.tools.find((tool) => tool.name === "http_request")?.inputSchema
+        .properties?.proxy,
+      "http_request should expose the optional proxy parameter",
+    );
 
     const posted = await client.callTool({
       name: "http_request",
@@ -111,5 +116,45 @@ test("http_request tool serves direct HTTP requests with audited operations", as
     await runtime.cleanup();
     target.closeAllConnections();
     await new Promise<void>((done) => target.close(() => done()));
+  }
+});
+
+test("http_request passes the proxy parameter through MCP", async () => {
+  let requestedUrl: string | undefined;
+  const proxy = http.createServer((request, response) => {
+    requestedUrl = request.url;
+    response.setHeader("content-type", "text/plain");
+    response.end("response from proxy");
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+  const runtime = await createTestRuntime();
+  const client = new Client({ name: "http-proxy-test", version: "1.0.0" });
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    await client.connect(
+      new StreamableHTTPClientTransport(
+        new URL(`http://127.0.0.1:${address.port}/mcp`),
+      ),
+    );
+    const result = await client.callTool({
+      name: "http_request",
+      arguments: {
+        url: "http://unresolvable.invalid/proxied",
+        proxy: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
+      },
+    });
+    assert.equal(result.isError, undefined);
+    assert.equal(
+      (result.structuredContent as { body: string }).body,
+      "response from proxy",
+    );
+    assert.equal(requestedUrl, "http://unresolvable.invalid/proxied");
+  } finally {
+    await client.close().catch(() => undefined);
+    await runtime.cleanup();
+    proxy.closeAllConnections();
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
   }
 });

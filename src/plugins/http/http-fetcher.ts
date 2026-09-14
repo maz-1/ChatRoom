@@ -1,5 +1,13 @@
 import { ChatRoomError } from "../../core/errors/chatroom-error.js";
 import type { HttpRequestInput, HttpResponse } from "./types.js";
+import {
+  fetch,
+  ProxyAgent,
+  Socks5ProxyAgent,
+  type Dispatcher,
+  type RequestInit,
+  type Response,
+} from "undici";
 
 export interface HttpFetcherLimits {
   defaultTimeoutMs: number;
@@ -24,28 +32,69 @@ export class HttpFetcher {
       input.timeoutMs ?? this.limits.defaultTimeoutMs,
       this.limits.maxTimeoutMs,
     );
-    let response: Response;
     const body = encodeRequestBody(input);
     const headers = normalizeHeaders(input.headers);
+    const dispatcher =
+      input.proxy === undefined
+        ? undefined
+        : createProxy(input.proxy, timeoutMs);
     try {
-      response = await fetch(url, {
+      const options: RequestInit & { dispatcher?: Dispatcher } = {
         method: input.method,
         ...(headers === undefined ? {} : { headers }),
         ...(body === undefined ? {} : { body }),
         redirect: "follow",
         signal: AbortSignal.timeout(timeoutMs),
-      });
+        ...(dispatcher === undefined ? {} : { dispatcher }),
+      };
+      const response = await fetch(url, options);
+      return await readResponse(
+        response,
+        url,
+        input.responseFormat,
+        timeoutMs,
+        this.limits.maxResponseBytes,
+      );
     } catch (error) {
       throw translateRequestError(error, timeoutMs);
+    } finally {
+      await dispatcher?.destroy();
     }
-    return await readResponse(
-      response,
-      url,
-      input.responseFormat,
-      timeoutMs,
-      this.limits.maxResponseBytes,
-    );
   }
+}
+
+function createProxy(raw: string, timeoutMs: number): Dispatcher {
+  let proxy: URL;
+  try {
+    proxy = new URL(raw);
+  } catch {
+    throw new ChatRoomError("INVALID_INPUT", "Invalid proxy URL");
+  }
+  if (!["http:", "https:", "socks5:"].includes(proxy.protocol))
+    throw new ChatRoomError(
+      "UNSUPPORTED",
+      "Only http, https, and socks5 proxies are supported",
+    );
+  if (proxy.username || proxy.password)
+    throw new ChatRoomError(
+      "INVALID_INPUT",
+      "Proxy authentication is not supported",
+    );
+  if (
+    !proxy.hostname ||
+    (proxy.pathname !== "" && proxy.pathname !== "/") ||
+    proxy.search ||
+    proxy.hash
+  )
+    throw new ChatRoomError(
+      "INVALID_INPUT",
+      "Proxy URL must contain only a host and optional port",
+    );
+  if (proxy.port && (Number(proxy.port) < 1 || Number(proxy.port) > 65535))
+    throw new ChatRoomError("INVALID_INPUT", "Invalid proxy port");
+  return proxy.protocol === "socks5:"
+    ? new Socks5ProxyAgent(proxy, { connectTimeout: timeoutMs })
+    : new ProxyAgent({ uri: proxy.toString(), connectTimeout: timeoutMs });
 }
 
 function parseTargetUrl(raw: string): URL {
@@ -84,7 +133,7 @@ function normalizeHeaders(
   return normalized;
 }
 
-function encodeRequestBody(input: HttpRequestInput): BodyInit | undefined {
+function encodeRequestBody(input: HttpRequestInput): RequestInit["body"] {
   if (input.body === undefined) return undefined;
   if (input.bodyEncoding === "text") return input.body;
   const compact = input.body.replace(/\s+/g, "");

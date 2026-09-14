@@ -12,6 +12,13 @@ export const HTTP_METHODS = [
 
 export const httpRequestSchema = z.object({
   url: z.string().min(1),
+  proxy: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Optional proxy URL using http://, https://, or socks5://. Authentication is not supported. Omit for a direct connection.",
+    ),
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.record(z.string(), z.string()).optional(),
   body: z.string().optional(),

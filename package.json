@@ -33,6 +33,7 @@
     "@modelcontextprotocol/server": "^2.0.0",
     "@simplewebauthn/server": "13.3.2",
     "express": "^5.1.0",
+    "undici": "^8.10.2",
     "ws": "^8.18.3",
     "zod": "^4.0.17"
   },
