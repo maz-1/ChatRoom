@@ -7,3 +7,8 @@ coverage/
 
 # Rust build output
 native/*/target/
+
+# C# build output (tools/ChatRoomConfigEditor)
+tools/**/bin/
+tools/**/obj/
+.vs/
