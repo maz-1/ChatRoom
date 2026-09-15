@@ -194,7 +194,7 @@ public partial class MainForm : Form
             WrapContents = false,
         };
         var databaseBrowse = new Button { Text = "浏览…", AutoSize = true };
-        var databaseClear = new Button { Text = "清除（由 ChatRoom 推导）", AutoSize = true };
+        var databaseClear = new Button { Text = "清除", AutoSize = true };
         databaseBrowse.Click += (_, _) => BrowseInto(_databasePathBox, saveFile: true);
         databaseClear.Click += (_, _) => _databasePathBox.Text = string.Empty;
         databaseButtons.Controls.AddRange(new Control[] { databaseBrowse, databaseClear });
