@@ -16,7 +16,9 @@ dotnet build
 dotnet run
 ```
 
-产物：`bin/Debug/net48/ChatRoomConfigEditor.exe`（同目录会带 `Newtonsoft.Json.dll` 与 `ChatRoomConfigEditor.exe.config`）
+产物：`bin/Debug/net48/ChatRoomConfigEditor.exe`。构建过程通过 ILRepack 将
+`Newtonsoft.Json.dll` 合并进 EXE，因此发布时无需携带独立的依赖 DLL；
+`ChatRoomConfigEditor.exe.config` 仍用于 .NET Framework 和高 DPI 设置。
 
 工程为 SDK 风格 csproj 且目标为 `net48`，可直接用 VS 2022 打开；也可在 VS 里改回传统 csproj 格式，源码无需改动。
 
@@ -25,6 +27,7 @@ dotnet run
 唯一的 NuGet 依赖是 **Newtonsoft.Json 13.0.3**。net48 上没有 `System.Text.Json` 的多态序列化支持
 （`[JsonPolymorphic]` / `[JsonDerivedType]` 属 .NET 7+），因此改用 Newtonsoft，并通过
 `McpServerConverter` 按 `type` 字段读写两种 MCP 传输方式——输出键顺序与 ChatRoom 自身写法一致。
+**ILRepack.Lib.MSBuild.Task** 仅在构建时使用，不会成为运行时依赖。
 
 ## 能编辑的内容
 

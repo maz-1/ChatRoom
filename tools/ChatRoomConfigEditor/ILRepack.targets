@@ -1,0 +1,31 @@
+<Project>
+  <Target
+    Name="MergeDependenciesIntoExe"
+    AfterTargets="Build"
+    Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
+    <ItemGroup>
+      <ILRepackInput Include="$(TargetPath)" />
+      <ILRepackDependency
+        Include="@(ReferenceCopyLocalPaths)"
+        Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' and Exists('%(ReferenceCopyLocalPaths.FullPath)')" />
+      <ILRepackOutputDependency
+        Include="@(ReferenceCopyLocalPaths->'$(OutDir)%(DestinationSubDirectory)%(Filename)%(Extension)')"
+        Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+      <ILRepackInput Include="@(ILRepackDependency)" />
+    </ItemGroup>
+
+    <ILRepack
+      AllowDuplicateResources="false"
+      DebugInfo="$(DebugSymbols)"
+      InputAssemblies="@(ILRepackInput)"
+      Internalize="true"
+      LibraryPath="$(TargetDir)"
+      OutputFile="$(TargetPath)"
+      Parallel="true"
+      TargetKind="SameAsPrimaryAssembly"
+      TargetPlatformDirectory="$(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\$(TargetFrameworkVersion)"
+      TargetPlatformVersion="v4" />
+
+    <Delete Files="@(ILRepackOutputDependency)" />
+  </Target>
+</Project>
