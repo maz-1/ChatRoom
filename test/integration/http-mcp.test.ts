@@ -266,3 +266,108 @@ test("remote WebUI mutations require same-origin while loopback WebUI stays loca
     await runtime.cleanup();
   }
 });
+
+test("OAuth client registration logs accepted and rejected remote requests", async () => {
+  const runtime = await createTestRuntime({
+    configure(config) {
+      config.auth.mcpPublicBaseUrl = "https://mcp.example.com";
+    },
+  });
+  const acceptedLogs: unknown[][] = [];
+  const rejectedLogs: unknown[][] = [];
+  const originalInfo = console.info;
+  const originalWarn = console.warn;
+  console.info = (...args: unknown[]) => acceptedLogs.push(args);
+  console.warn = (...args: unknown[]) => rejectedLogs.push(args);
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+
+    const accepted = await requestWithHost(address.port, "/oauth/register", {
+      method: "POST",
+      host: "mcp.example.com",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "remote-mcp-test/1.0",
+      },
+      body: JSON.stringify({
+        client_name: "Remote MCP Test",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(accepted.status, 201);
+    assert.equal(acceptedLogs.length, 1);
+    assert.equal(
+      acceptedLogs[0]?.[0],
+      "[oauth] Remote server registration accepted",
+    );
+    assertRegistrationLog({
+      value: acceptedLogs[0]?.[1],
+      clientName: "Remote MCP Test",
+      redirectUris: ["http://127.0.0.1/callback"],
+      host: "mcp.example.com",
+      userAgent: "remote-mcp-test/1.0",
+      externalMcp: true,
+    });
+
+    const rejected = await requestWithHost(address.port, "/oauth/register", {
+      method: "POST",
+      host: "mcp.example.com",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "rejected-mcp-test/1.0",
+      },
+      body: JSON.stringify({
+        client_name: "Rejected MCP Test",
+        redirect_uris: ["http://remote.example.com/callback"],
+      }),
+    });
+    assert.equal(rejected.status, 400);
+    assert.equal(rejectedLogs.length, 1);
+    const rejectedDetails = rejectedLogs[0]?.[1] as Record<string, unknown>;
+    assert.equal(
+      rejectedLogs[0]?.[0],
+      "[oauth] Remote server registration rejected",
+    );
+    assert.equal(rejectedDetails.clientName, "Rejected MCP Test");
+    assert.deepEqual(rejectedDetails.redirectUris, [
+      "http://remote.example.com/callback",
+    ]);
+    assert.equal(rejectedDetails.host, "mcp.example.com");
+    assert.equal(rejectedDetails.userAgent, "rejected-mcp-test/1.0");
+    assert.equal(rejectedDetails.externalMcp, true);
+    assert.equal(rejectedDetails.error, "FORBIDDEN");
+    assert.equal(
+      rejectedDetails.reason,
+      "OAuth redirects must use HTTPS unless loopback",
+    );
+    assert.match(String(rejectedDetails.timestamp), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(typeof rejectedDetails.sourceAddress, "string");
+    assert.equal(typeof rejectedDetails.sourcePort, "number");
+  } finally {
+    console.info = originalInfo;
+    console.warn = originalWarn;
+    await runtime.cleanup();
+  }
+});
+
+function assertRegistrationLog(input: {
+  value: unknown;
+  clientName: string;
+  redirectUris: string[];
+  host: string;
+  userAgent: string;
+  externalMcp: boolean;
+}): void {
+  const value = input.value as Record<string, unknown>;
+  assert.equal(value.clientName, input.clientName);
+  assert.deepEqual(value.redirectUris, input.redirectUris);
+  assert.equal(value.host, input.host);
+  assert.equal(value.userAgent, input.userAgent);
+  assert.equal(value.externalMcp, input.externalMcp);
+  assert.match(String(value.clientId), /^client_/);
+  assert.match(String(value.timestamp), /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof value.sourceAddress, "string");
+  assert.equal(typeof value.sourcePort, "number");
+}
