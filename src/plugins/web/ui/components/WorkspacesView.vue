@@ -15,7 +15,7 @@ const allowedRoots = ref<string[]>([]);
 const selectedRoot = ref<string | null>(
   window.localStorage.getItem("chatroom.workspace.root"),
 );
-const tab = ref("git");
+const tab = ref("files");
 const loading = ref(false);
 const error = ref("");
 const createOpen = ref(false);
