@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
+import { ChatRoomError } from "../../../core/errors/chatroom-error.js";
 import type { OperationLog } from "../../../operations/operation-log.js";
 import { asyncRoute } from "../../../presentation/http/http-utils.js";
 import type { McpProxyService } from "../../mcp-proxy/mcp-proxy-service.js";
@@ -11,9 +12,8 @@ export interface McpServersPayload {
 }
 
 /**
- * Read-only MCP server surface for the WebUI. Server definitions are owned by
- * the configuration file and edited outside ChatRoom, so this router exposes
- * discovery plus an explicit reconnect and nothing else.
+ * MCP server surface for the WebUI. Server definitions remain owned by the
+ * configuration file; only their local enabled/disabled state is mutable.
  */
 export function createMcpApiRouter(
   proxy: McpProxyService,
@@ -28,6 +28,29 @@ export function createMcpApiRouter(
       res.json(
         await present(proxy, configPath(), optionalString(req.query.server)),
       );
+    }),
+  );
+
+  router.patch(
+    "/mcp/servers/:serverName",
+    asyncRoute(async (req, res) => {
+      const server = optionalString(req.params.serverName);
+      if (!server)
+        throw new ChatRoomError("INVALID_INPUT", "serverName is required");
+      const body = bodyRecord(req.body);
+      if (typeof body.enabled !== "boolean")
+        throw new ChatRoomError("INVALID_INPUT", "enabled must be a boolean");
+      await operations.run(
+        {
+          pluginId: "mcp-proxy",
+          source: "gui",
+          action: "set-enabled",
+          input: { server, enabled: body.enabled },
+        },
+        () => proxy.setEnabled(server, body.enabled as boolean),
+      );
+      const { servers } = await proxy.inspect(server);
+      res.json(servers[0]);
     }),
   );
 

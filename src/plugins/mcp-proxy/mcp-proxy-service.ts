@@ -28,9 +28,15 @@ import type {
 
 const STDERR_TAIL_BYTES = 8 * 1024;
 
+export interface McpServerSettingStore {
+  disabledServers(): string[];
+  setEnabled(name: string, enabled: boolean): void;
+}
+
 interface ServerState {
   readonly name: string;
   readonly config: McpServerConfig;
+  enabled: boolean;
   client: Client | null;
   tools: Tool[] | null;
   status: "idle" | "connected" | "error";
@@ -47,11 +53,14 @@ export class McpProxyService {
   constructor(
     private readonly config: McpConfig,
     private readonly events: RuntimeEventBus,
+    private readonly store: McpServerSettingStore,
   ) {
+    const disabled = new Set(store.disabledServers());
     for (const [name, serverConfig] of Object.entries(config.servers))
       this.servers.set(name, {
         name,
         config: serverConfig,
+        enabled: !disabled.has(name),
         client: null,
         tools: null,
         status: "idle",
@@ -77,6 +86,11 @@ export class McpProxyService {
 
   async call(input: McpCallInput): Promise<Omit<McpCallOutput, "operationId">> {
     const state = this.require(input.server);
+    if (!state.enabled)
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        `MCP server "${state.name}" is disabled`,
+      );
     try {
       await this.ensureConnected(state);
     } catch (error) {
@@ -149,6 +163,23 @@ export class McpProxyService {
     return await this.list({ server: serverName, includeSchemas: true });
   }
 
+  async setEnabled(name: string, enabled: boolean): Promise<McpServerSummary> {
+    const state = this.require(name);
+    if (state.enabled !== enabled) {
+      this.store.setEnabled(name, enabled);
+      state.enabled = enabled;
+      if (!enabled) {
+        await state.connecting?.catch(() => undefined);
+        await this.close(state);
+      } else {
+        state.status = "idle";
+        state.error = null;
+      }
+      this.events.emit({ type: "mcp-servers" });
+    }
+    return await this.describe(state, true);
+  }
+
   async shutdown(): Promise<void> {
     for (const state of this.servers.values()) await this.close(state);
   }
@@ -173,6 +204,18 @@ export class McpProxyService {
     state: ServerState,
     includeSchemas: boolean,
   ): Promise<McpServerSummary> {
+    if (!state.enabled)
+      return {
+        name: state.name,
+        type: state.config.type,
+        target: describeTarget(state.config),
+        enabled: false,
+        status: "disabled",
+        error: null,
+        toolCount: 0,
+        tools: [],
+      };
+
     try {
       await this.ensureConnected(state);
     } catch {
@@ -183,6 +226,7 @@ export class McpProxyService {
       name: state.name,
       type: state.config.type,
       target: describeTarget(state.config),
+      enabled: true,
       status: state.client ? "connected" : "error",
       error: state.error,
       toolCount: tools.length,
@@ -191,6 +235,11 @@ export class McpProxyService {
   }
 
   private async ensureConnected(state: ServerState): Promise<void> {
+    if (!state.enabled)
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        `MCP server "${state.name}" is disabled`,
+      );
     if (state.client) return;
     if (state.connecting) return await state.connecting;
     const pending = this.connect(state).finally(() => {

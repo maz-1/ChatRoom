@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useLocale } from "vuetify";
 import { api, type McpServersView, type McpToolSummary } from "../api.js";
 import CodeViewer from "./CodeViewer.vue";
@@ -11,6 +11,7 @@ const payload = ref<McpServersView | null>(null);
 const selectedName = ref<string | null>(null);
 const error = ref("");
 const busy = ref(false);
+const toggleBusy = reactive(new Set<string>());
 
 const servers = computed(() => payload.value?.servers ?? []);
 const selected = computed(
@@ -50,6 +51,31 @@ async function refresh(server?: string): Promise<void> {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     busy.value = false;
+  }
+}
+
+async function setEnabled(name: string, enabled: boolean): Promise<void> {
+  if (toggleBusy.has(name)) return;
+  toggleBusy.add(name);
+  try {
+    error.value = "";
+    const updated = await api<McpServersView["servers"][number]>(
+      `/mcp/servers/${encodeURIComponent(name)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      },
+    );
+    if (payload.value) {
+      const index = payload.value.servers.findIndex(
+        (item) => item.name === name,
+      );
+      if (index >= 0) payload.value.servers[index] = updated;
+    }
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    toggleBusy.delete(name);
   }
 }
 
@@ -124,6 +150,9 @@ function toolSchema(tool: McpToolSummary): string | null {
               <tr>
                 <th>{{ locale.t("$vuetify.chatroom.mcp.server") }}</th>
                 <th>{{ locale.t("$vuetify.chatroom.mcp.transport") }}</th>
+                <th class="text-center">
+                  {{ locale.t("$vuetify.chatroom.mcp.enabled") }}
+                </th>
                 <th>{{ locale.t("$vuetify.chatroom.mcp.status") }}</th>
                 <th class="text-right">
                   {{ locale.t("$vuetify.chatroom.mcp.tools") }}
@@ -150,15 +179,39 @@ function toolSchema(tool: McpToolSummary): string | null {
                 <td>
                   <v-chip size="small" variant="tonal">{{ item.type }}</v-chip>
                 </td>
+                <td class="text-center" @click.stop>
+                  <v-switch
+                    class="mcp-server-switch"
+                    :model-value="item.enabled"
+                    color="primary"
+                    density="compact"
+                    hide-details
+                    inset
+                    :loading="toggleBusy.has(item.name)"
+                    :disabled="busy"
+                    :aria-label="
+                      locale.t('$vuetify.chatroom.mcp.toggleServer', item.name)
+                    "
+                    @update:model-value="setEnabled(item.name, Boolean($event))"
+                  />
+                </td>
                 <td>
                   <v-chip
                     size="small"
                     variant="tonal"
-                    :color="item.status === 'connected' ? 'success' : 'error'"
+                    :color="
+                      item.status === 'connected'
+                        ? 'success'
+                        : item.status === 'disabled'
+                          ? 'secondary'
+                          : 'error'
+                    "
                     :prepend-icon="
                       item.status === 'connected'
                         ? 'mdi-check-circle-outline'
-                        : 'mdi-alert-circle-outline'
+                        : item.status === 'disabled'
+                          ? 'mdi-power-off'
+                          : 'mdi-alert-circle-outline'
                     "
                   >
                     {{
@@ -219,6 +272,7 @@ function toolSchema(tool: McpToolSummary): string | null {
             size="small"
             prepend-icon="mdi-refresh"
             :loading="busy"
+            :disabled="!selected.enabled"
             @click="refresh(selected.name)"
           >
             {{ locale.t("$vuetify.chatroom.mcp.reconnect") }}
@@ -300,6 +354,12 @@ function toolSchema(tool: McpToolSummary): string | null {
 
 .mcp-table {
   width: 100%;
+}
+
+.mcp-server-switch {
+  width: 52px;
+  min-width: 52px;
+  margin-inline: auto;
 }
 
 .mcp-target {

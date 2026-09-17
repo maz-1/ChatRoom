@@ -2,6 +2,7 @@ import type { ChatRoomConfig } from "../config/types.js";
 import { AppDatabase } from "../infrastructure/database/app-database.js";
 import { OperationRepository } from "../infrastructure/database/operation-repository.js";
 import { McpToolSettingsRepository } from "../infrastructure/database/mcp-tool-settings-repository.js";
+import { McpServerSettingsRepository } from "../infrastructure/database/mcp-server-settings-repository.js";
 import { OAuthRepository } from "../infrastructure/database/oauth-repository.js";
 import { PasskeyRepository } from "../infrastructure/database/passkey-repository.js";
 import { WebSessionRepository } from "../infrastructure/database/web-session-repository.js";
@@ -85,7 +86,7 @@ export async function createApplication(
         createGitPlugin(),
         createProcessPlugin(),
         createHttpPlugin(),
-        createMcpProxyPlugin(),
+        createMcpProxyPlugin(new McpServerSettingsRepository(database)),
         createComputerPlugin(),
         createCloudPlugin(),
         createWebPlugin(),

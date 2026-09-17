@@ -67,6 +67,7 @@ const nav = [
     titleKey: "nav.mcp",
     icon: "mdi-server-network",
   },
+  { id: "tools", titleKey: "nav.mcpTools", icon: "mdi-tune-variant" },
   { id: "cloud", titleKey: "nav.cloud", icon: "mdi-cloud-outline" },
   {
     id: "operations",
@@ -310,6 +311,8 @@ function viewFromPath(): View {
       return "computer";
     case "/mcp-servers":
       return "mcp-servers";
+    case "/tools":
+      return "tools";
     case "/cloud":
       return "cloud";
     case "/operations":

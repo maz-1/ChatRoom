@@ -53,7 +53,7 @@ export interface ComputerPreviewView {
 
 export type Operation = DomainOperation;
 
-/** Read-only MCP server surface: definitions live in the config file. */
+/** MCP server view: definitions live in config; enabled state is stored locally. */
 export interface McpServersView {
   configPath: string;
   servers: McpServerDetail[];
