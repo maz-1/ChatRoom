@@ -11,18 +11,20 @@ dotnet build -c Release
 
 Output: `bin/Release/net48/ChatRoomTray.exe`.
 
-The build uses `tools/chatgpt.ico` as the executable/tray icon and ILRepack to merge managed dependencies into the EXE. `chatgpt.ico` and `chatroom-tray-launcher.cmd` are also copied beside the EXE for runtime use.
+The build uses `tools/chatgpt.ico` as the executable/tray icon and ILRepack to merge managed dependencies into the EXE. `chatgpt.ico` is also copied beside the EXE for runtime use.
 
 ## Runtime layout
 
-Deploy `ChatRoomTray.exe` beside the normal ChatRoom runtime files:
+Deploy the tray with the packaged ChatRoom runtime:
 
-- `chatroom.cmd`
+- `ChatRoomTray.exe`
 - `node.exe`
-- `chatroom-tray-launcher.cmd`
 - `chatgpt.ico`
+- `app/dist/cli/index.js`
+- `app/node_modules/`
+- `app/package.json`
 
-The tray application keeps compatibility with the old `chatroom-tray.ini`; `[ChatRoom] Args` defaults to `serve`.
+`ChatRoomTray.exe` launches `node.exe app/dist/cli/index.js ...` directly; no `.cmd` or `.bat` launcher is required. The tray application keeps compatibility with the old `chatroom-tray.ini`; `[ChatRoom] Args` defaults to `serve`.
 
 ## Tray functions
 

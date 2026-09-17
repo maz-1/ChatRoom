@@ -16,9 +16,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private static readonly TimeSpan QuickExitWindow = TimeSpan.FromSeconds(15);
 
     private readonly string _appDir;
-    private readonly string _launcherPath;
-    private readonly string _chatCommandPath;
     private readonly string _nodePath;
+    private readonly string _chatEntryPath;
     private readonly TraySettings _settings;
     private readonly Icon _appIcon;
     private readonly ContextMenuStrip _menu = new();
@@ -44,9 +43,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     public TrayApplicationContext()
     {
         _appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        _launcherPath = Path.Combine(_appDir, "chatroom-tray-launcher.cmd");
-        _chatCommandPath = Path.Combine(_appDir, "chatroom.cmd");
         _nodePath = Path.Combine(_appDir, "node.exe");
+        _chatEntryPath = Path.Combine(_appDir, "app", "dist", "cli", "index.js");
 
         EnsureRuntimeFiles();
 
@@ -76,9 +74,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void EnsureRuntimeFiles()
     {
         var missing = string.Empty;
-        if (!File.Exists(_chatCommandPath)) missing += "\n" + _chatCommandPath;
         if (!File.Exists(_nodePath)) missing += "\n" + _nodePath;
-        if (!File.Exists(_launcherPath)) missing += "\n" + _launcherPath;
+        if (!File.Exists(_chatEntryPath)) missing += "\n" + _chatEntryPath;
         if (missing.Length == 0) return;
 
         throw new FileNotFoundException("未找到 ChatRoom 运行文件：" + missing + "\n\n请将 ChatRoomTray.exe 与 ChatRoom 运行文件放在同一目录。");
@@ -138,14 +135,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         DisposeTrackedProcess();
         var configExists = File.Exists(ConfigPaths.DefaultConfigPath());
         var args = configExists ? _settings.Args : string.Empty;
-        var comSpec = Environment.GetEnvironmentVariable("ComSpec");
-        if (string.IsNullOrWhiteSpace(comSpec)) comSpec = "cmd.exe";
 
         try
         {
             _process = StartHiddenConsoleProcess(
-                comSpec,
-                BuildLauncherArguments(_launcherPath, args),
+                _nodePath,
+                BuildNodeArguments(_chatEntryPath, args),
                 _appDir);
             _recentStartUtc = DateTime.UtcNow;
             _wasRunning = true;
@@ -170,6 +165,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var startupInfo = new NativeMethods.StartupInfo
         {
             cb = Marshal.SizeOf(typeof(NativeMethods.StartupInfo)),
+            lpTitle = ConsoleTitle,
             dwFlags = NativeMethods.StartfUseShowWindow,
             wShowWindow = NativeMethods.SwHide,
         };
@@ -203,10 +199,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private static string BuildLauncherArguments(string launcherPath, string args)
+    private static string BuildNodeArguments(string entryPath, string args)
     {
         var suffix = string.IsNullOrWhiteSpace(args) ? string.Empty : " " + args;
-        return "/d /s /c \"\"" + launcherPath + "\"" + suffix + "\"";
+        return "\"" + entryPath + "\"" + suffix;
     }
 
     private void StopChatRoom()

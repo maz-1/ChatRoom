@@ -22,7 +22,7 @@ internal sealed class StartupArgsDialog : Form
         {
             AutoSize = true,
             MaximumSize = new Size(520, 0),
-            Text = "启动 ChatRoom 时传给 chatroom.cmd 的命令行参数。CLI 目前支持 init 和 serve；留空表示无参数（首次运行会自动初始化并打开浏览器）。端口、host 等运行参数请通过“编辑配置”修改后重启。",
+            Text = "启动 ChatRoom 时传给内置 Node.js CLI 的命令行参数。CLI 目前支持 init 和 serve；留空表示无参数。端口、host 等运行参数请通过“编辑配置”修改后重启。",
         };
 
         _argsBox = new TextBox
