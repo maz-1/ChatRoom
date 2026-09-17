@@ -41,7 +41,7 @@ dotnet run
 | MCP 服务 | `mcp.servers` 的**增删改**：`stdio`（命令/参数/环境变量/工作目录）与 `http`（URL/请求头/代理） |
 
 `mcp.servers` 的条目支持两种传输方式，字段与 ChatRoom 的校验规则一一对应。
-`stdio` 的“参数”每行一个；“环境变量”用 `KEY=VALUE`；“请求头”用 `Header: value`。
+`stdio` 的“参数”使用列表编辑器，每个列表项对应一个独立 argv 参数，可新建、编辑、删除和调整顺序；“环境变量”用 `KEY=VALUE`；“请求头”用 `Header: value`。
 
 ## ownerToken 的处理
 

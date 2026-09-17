@@ -261,12 +261,39 @@ internal static class Program
         {
             using var dialog = new McpServerDialog(
                 null,
-                transport == "stdio" ? new StdioMcpServerConfig() : new HttpMcpServerConfig(),
+                transport == "stdio"
+                    ? new StdioMcpServerConfig
+                    {
+                        Command = "python",
+                        Args = { "-m", "mcp_windbg" },
+                    }
+                    : new HttpMcpServerConfig(),
                 new HashSet<string>(StringComparer.Ordinal));
             dialog.StartPosition = FormStartPosition.Manual;
             dialog.Location = new Point(-8000, -8000);
             dialog.Show();
             Application.DoEvents();
+
+            if (transport == "stdio")
+            {
+                var argsList = Walk(dialog)
+                    .OfType<ListBox>()
+                    .FirstOrDefault(list => list.Name == "McpArgsList");
+                var argumentButtons = Walk(dialog)
+                    .OfType<Button>()
+                    .Select(button => button.Text)
+                    .ToHashSet(StringComparer.Ordinal);
+                Check(
+                    "MCP stdio 参数使用独立列表项",
+                    argsList is not null
+                    && argsList.Items.Count == 2
+                    && string.Equals((string)argsList.Items[0], "-m", StringComparison.Ordinal)
+                    && string.Equals((string)argsList.Items[1], "mcp_windbg", StringComparison.Ordinal));
+                Check(
+                    "MCP stdio 参数列表提供编辑与排序操作",
+                    new[] { "新建", "编辑", "删除", "上移", "下移" }
+                        .All(argumentButtons.Contains));
+            }
 
             var tables = Walk(dialog)
                 .OfType<TableLayoutPanel>()

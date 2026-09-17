@@ -19,14 +19,19 @@ public sealed class McpServerDialog : Form
     };
 
     private readonly TextBox _commandBox = new();
-    private readonly TextBox _argsBox = new()
+    private readonly ListBox _argsList = new()
     {
-        Multiline = true,
-        ScrollBars = ScrollBars.Vertical,
-        AcceptsReturn = true,
-        MinimumSize = new Size(0, 70),
+        Dock = DockStyle.Fill,
+        IntegralHeight = false,
+        HorizontalScrollbar = true,
+        MinimumSize = new Size(0, 110),
         Font = new Font("Consolas", 9f),
     };
+    private readonly Button _argNewButton = new() { Text = "新建", AutoSize = true };
+    private readonly Button _argEditButton = new() { Text = "编辑", AutoSize = true };
+    private readonly Button _argDeleteButton = new() { Text = "删除", AutoSize = true };
+    private readonly Button _argUpButton = new() { Text = "上移", AutoSize = true };
+    private readonly Button _argDownButton = new() { Text = "下移", AutoSize = true };
     private readonly TextBox _envBox = new()
     {
         Multiline = true,
@@ -145,7 +150,8 @@ public sealed class McpServerDialog : Form
                 _nameBox.Text = _originalName ?? string.Empty;
                 _typeBox.SelectedItem = "stdio";
                 _commandBox.Text = stdio.Command;
-                _argsBox.Text = string.Join(Environment.NewLine, stdio.Args);
+                _argsList.Items.Clear();
+                foreach (var argument in stdio.Args) _argsList.Items.Add(argument);
                 _envBox.Text = FormatPairs(stdio.Env, "=");
                 _cwdBox.Text = stdio.Cwd ?? string.Empty;
                 break;
@@ -216,11 +222,7 @@ public sealed class McpServerDialog : Form
             Result = new StdioMcpServerConfig
             {
                 Command = command,
-                Args = _argsBox.Text
-                    .Split('\n')
-                    .Select(line => line.TrimEnd('\r'))
-                    .Where(line => line.Length > 0)
-                    .ToList(),
+                Args = _argsList.Items.Cast<string>().ToList(),
                 Env = env,
                 Cwd = NullIfBlank(_cwdBox.Text),
             };
@@ -276,10 +278,137 @@ public sealed class McpServerDialog : Form
         cwdRow.Controls.Add(browse);
 
         AddField(table, "命令", _commandBox);
-        AddField(table, "参数", _argsBox, grow: true);
+        AddField(table, "参数", BuildArgsEditor(), grow: true);
         AddField(table, "环境变量", _envBox, grow: true);
         AddField(table, "工作目录", cwdRow);
         return table;
+    }
+
+    private Control BuildArgsEditor()
+    {
+        _argsList.Name = "McpArgsList";
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(6, 0, 0, 0),
+        };
+        foreach (var button in new[]
+        {
+            _argNewButton,
+            _argEditButton,
+            _argDeleteButton,
+            _argUpButton,
+            _argDownButton,
+        })
+        {
+            button.MinimumSize = new Size(72, 0);
+            buttons.Controls.Add(button);
+        }
+
+        _argNewButton.Click += (_, _) => AddArgument();
+        _argEditButton.Click += (_, _) => EditArgument();
+        _argDeleteButton.Click += (_, _) => DeleteArgument();
+        _argUpButton.Click += (_, _) => MoveArgument(-1);
+        _argDownButton.Click += (_, _) => MoveArgument(1);
+        _argsList.DoubleClick += (_, _) => EditArgument();
+        _argsList.SelectedIndexChanged += (_, _) => UpdateArgumentButtons();
+        _argsList.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Insert)
+            {
+                AddArgument();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.F2)
+            {
+                EditArgument();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                DeleteArgument();
+                e.Handled = true;
+            }
+        };
+
+        layout.Controls.Add(_argsList, 0, 0);
+        layout.Controls.Add(buttons, 1, 0);
+        UpdateArgumentButtons();
+        return layout;
+    }
+
+    private void AddArgument()
+    {
+        using var dialog = new TextInputDialog("新建参数", "参数", string.Empty);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Value.Length == 0) return;
+
+        var index = _argsList.Items.Add(dialog.Value);
+        _argsList.SelectedIndex = index;
+        _argsList.Focus();
+    }
+
+    private void EditArgument()
+    {
+        var index = _argsList.SelectedIndex;
+        if (index < 0) return;
+
+        var current = (string)_argsList.Items[index];
+        using var dialog = new TextInputDialog("编辑参数", "参数", current);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Value.Length == 0) return;
+
+        _argsList.Items[index] = dialog.Value;
+        _argsList.SelectedIndex = index;
+        _argsList.Focus();
+    }
+
+    private void DeleteArgument()
+    {
+        var index = _argsList.SelectedIndex;
+        if (index < 0) return;
+
+        _argsList.Items.RemoveAt(index);
+        if (_argsList.Items.Count > 0)
+            _argsList.SelectedIndex = Math.Min(index, _argsList.Items.Count - 1);
+        UpdateArgumentButtons();
+        _argsList.Focus();
+    }
+
+    private void MoveArgument(int delta)
+    {
+        var index = _argsList.SelectedIndex;
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= _argsList.Items.Count) return;
+
+        var value = _argsList.Items[index];
+        _argsList.Items.RemoveAt(index);
+        _argsList.Items.Insert(target, value);
+        _argsList.SelectedIndex = target;
+        _argsList.Focus();
+    }
+
+    private void UpdateArgumentButtons()
+    {
+        var index = _argsList.SelectedIndex;
+        var selected = index >= 0;
+        _argEditButton.Enabled = selected;
+        _argDeleteButton.Enabled = selected;
+        _argUpButton.Enabled = selected && index > 0;
+        _argDownButton.Enabled = selected && index < _argsList.Items.Count - 1;
     }
 
     private TableLayoutPanel BuildHttpPanel()
