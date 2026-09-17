@@ -34,6 +34,10 @@ import { createChatRoomMcpHandler } from "../mcp/server/create-mcp-server.js";
 import { McpToolControl } from "../mcp/server/tool-control.js";
 import { HttpServer } from "../infrastructure/http/http-server.js";
 
+export interface RuntimeSecrets {
+  ownerToken: string | null;
+}
+
 export interface ApplicationComponents {
   database: AppDatabase;
   eventBus: RuntimeEventBus;
@@ -50,6 +54,7 @@ export interface ApplicationComponents {
 
 export async function createApplication(
   config: ChatRoomConfig,
+  secrets: RuntimeSecrets,
 ): Promise<ApplicationComponents> {
   const database = new AppDatabase(config.databasePath);
   try {
@@ -68,6 +73,7 @@ export async function createApplication(
       new OAuthRepository(database),
       new WebSessionRepository(database),
       config.auth,
+      secrets.ownerToken,
     );
     const passkeys = new PasskeyService(new PasskeyRepository(database));
     const services = new ServiceRegistry();

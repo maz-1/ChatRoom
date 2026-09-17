@@ -48,7 +48,10 @@ public static class ConfigValidator
 
     private static readonly Regex McpServerName = new("^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
 
-    public static List<ValidationIssue> Validate(ChatRoomConfig config, IEnumerable<string> unknownKeys)
+    public static List<ValidationIssue> Validate(
+        ChatRoomConfig config,
+        IEnumerable<string> unknownKeys,
+        bool ownerTokenPresent)
     {
         var issues = new List<ValidationIssue>();
 
@@ -60,7 +63,7 @@ public static class ConfigValidator
         ValidateOperations(config, issues);
         ValidateProcess(config, issues);
         ValidateMcp(config, issues);
-        ValidateRuntimeSecurity(config, issues);
+        ValidateRuntimeSecurity(config, issues, ownerTokenPresent);
 
         foreach (var key in unknownKeys)
             issues.Add(new ValidationIssue(
@@ -113,9 +116,6 @@ public static class ConfigValidator
 
     private static void ValidateAuth(ChatRoomConfig config, List<ValidationIssue> issues)
     {
-        if (config.Auth.OwnerToken is { Length: 0 })
-            issues.Add(Error("auth.ownerToken", "令牌不能是空字符串；应留空(null)或填写有效值。"));
-
         ValidateOptionalUrl(config.Auth.McpPublicBaseUrl, "auth.mcpPublicBaseUrl", issues);
         ValidateOptionalUrl(config.Auth.WebPublicBaseUrl, "auth.webPublicBaseUrl", issues);
 
@@ -201,7 +201,10 @@ public static class ConfigValidator
     }
 
     /// <summary>Mirrors validateRuntimeSecurity() and createProxyDispatcher().</summary>
-    private static void ValidateRuntimeSecurity(ChatRoomConfig config, List<ValidationIssue> issues)
+    private static void ValidateRuntimeSecurity(
+        ChatRoomConfig config,
+        List<ValidationIssue> issues,
+        bool ownerTokenPresent)
     {
         var host = config.Server.Host.Trim();
         var loopback = host is "127.0.0.1" or "::1" or "localhost";
@@ -214,10 +217,10 @@ public static class ConfigValidator
             || !string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl)
             || !string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl);
 
-        if (authenticationUsed && !OwnerToken.IsPresent(config.Auth.OwnerToken))
+        if (authenticationUsed && !ownerTokenPresent)
             issues.Add(Error(
-                "auth.ownerToken",
-                "启用了需要认证的入口（localWebAuth / 公网地址），必须设置 ownerToken，否则 ChatRoom 会拒绝启动。"));
+                "ownerToken",
+                "启用了需要认证的入口（localWebAuth / 公网地址），系统凭据管理器中必须存在 ownerToken，否则 ChatRoom 会拒绝启动。"));
     }
 
     private static void ValidateProxy(string proxy, string path, List<ValidationIssue> issues)

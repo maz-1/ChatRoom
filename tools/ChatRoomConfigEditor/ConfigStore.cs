@@ -15,13 +15,17 @@ public sealed class ConfigLoadResult
         bool existed,
         List<string> unknownKeys,
         DateTime? lastWriteTimeUtc,
-        long? length)
+        long? length,
+        bool hasLegacyOwnerToken,
+        string? legacyOwnerToken)
     {
         Config = config;
         Existed = existed;
         UnknownKeys = unknownKeys;
         LastWriteTimeUtc = lastWriteTimeUtc;
         Length = length;
+        HasLegacyOwnerToken = hasLegacyOwnerToken;
+        LegacyOwnerToken = legacyOwnerToken;
     }
 
     public ChatRoomConfig Config { get; }
@@ -34,6 +38,10 @@ public sealed class ConfigLoadResult
     public DateTime? LastWriteTimeUtc { get; }
 
     public long? Length { get; }
+
+    public bool HasLegacyOwnerToken { get; }
+
+    public string? LegacyOwnerToken { get; }
 }
 
 public sealed class ConfigChangedOnDiskException : Exception
@@ -81,6 +89,8 @@ public static class ConfigStore
         var unsupported = FindUnsupportedTransport(root);
         if (unsupported is not null) throw new InvalidDataException(unsupported);
 
+        var legacyOwnerToken = ExtractLegacyOwnerToken(root, out var hasLegacyOwnerToken);
+
         ChatRoomConfig config;
         try
         {
@@ -99,7 +109,9 @@ public static class ConfigStore
             true,
             FindUnknownKeys(root),
             info.LastWriteTimeUtc,
-            info.Length);
+            info.Length,
+            hasLegacyOwnerToken,
+            legacyOwnerToken);
     }
 
     /// <summary>Builds ChatRoom's own defaults (see defaultConfig() in load-config.ts).</summary>
@@ -113,7 +125,6 @@ public static class ConfigStore
         config.Auth = new AuthSection
         {
             LocalWebAuth = false,
-            OwnerToken = null,
             McpPublicBaseUrl = null,
             WebPublicBaseUrl = null,
         };
@@ -177,6 +188,52 @@ public static class ConfigStore
         }
 
         return backup;
+    }
+
+    public static void RemoveLegacyOwnerToken(string path, DateTime? expectedLastWriteUtc)
+    {
+        path = Path.GetFullPath(path);
+        if (!File.Exists(path)) return;
+        if (expectedLastWriteUtc.HasValue && File.GetLastWriteTimeUtc(path) != expectedLastWriteUtc.Value)
+            throw new ConfigChangedOnDiskException(
+                "配置文件在 ownerToken 迁移期间被其他程序修改过，请重新加载后重试。");
+
+        var root = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+        if (!(root["auth"] is JObject auth)) return;
+        var property = auth.Property("ownerToken");
+        if (property is null) return;
+        property.Remove();
+
+        var directory = Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException("无法解析目录：" + path);
+        var temporary = Path.Combine(
+            directory,
+            Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            File.WriteAllText(temporary, root.ToString(Formatting.Indented) + "\n", Utf8NoBom);
+            File.Replace(temporary, path, null);
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
+        }
+    }
+
+    private static string? ExtractLegacyOwnerToken(JObject root, out bool present)
+    {
+        present = false;
+        if (!(root["auth"] is JObject auth)) return null;
+        var property = auth.Property("ownerToken");
+        if (property is null) return null;
+        present = true;
+        if (property.Value.Type == JTokenType.Null) return null;
+        if (property.Value.Type != JTokenType.String)
+            throw new InvalidDataException("auth.ownerToken 旧字段必须是字符串或 null。");
+        var token = (string?)property.Value;
+        if (string.IsNullOrEmpty(token))
+            throw new InvalidDataException("auth.ownerToken 旧字段不能是空字符串。");
+        return token;
     }
 
     /// <summary>

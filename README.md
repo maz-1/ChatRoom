@@ -35,7 +35,7 @@ MCP    http://127.0.0.1:8765/mcp
 
 ChatGPT connects to ChatRoom through its MCP endpoint. For remote access, either enable ChatRoom Cloud from the WebUI or expose ChatRoom through your own HTTPS ingress and configure the corresponding public URL.
 
-Create a custom MCP app in ChatGPT Developer Mode, use the ChatRoom `/mcp` URL, and complete OAuth authorization with the `ownerToken` in the [configuration file](https://doc.chatroomcp.com/configuration).
+Create a custom MCP app in ChatGPT Developer Mode, use the ChatRoom `/mcp` URL, and complete OAuth authorization with the owner token stored in your system keychain. Run `chatroom auth token` when you explicitly need to reveal it.
 
 See [Use ChatRoom with ChatGPT](https://doc.chatroomcp.com/chatgpt) for the current ChatGPT setup flow.
 

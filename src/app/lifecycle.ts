@@ -2,16 +2,20 @@ import type { ChatRoomConfig } from "../config/types.js";
 import {
   createApplication,
   type ApplicationComponents,
+  type RuntimeSecrets,
 } from "./application.js";
 
 export class ApplicationLifecycle {
   private components: ApplicationComponents | null = null;
   private shuttingDown: Promise<void> | null = null;
-  constructor(private readonly config: ChatRoomConfig) {}
+  constructor(
+    private readonly config: ChatRoomConfig,
+    private readonly secrets: RuntimeSecrets,
+  ) {}
 
   async start(): Promise<ApplicationComponents> {
     if (this.components) return this.components;
-    const components = await createApplication(this.config);
+    const components = await createApplication(this.config, this.secrets);
     try {
       await components.http.start();
       await components.cloud.start();

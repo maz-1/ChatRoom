@@ -19,6 +19,40 @@ const emit = defineEmits<{
 const token = defineModel<string>("token", { required: true });
 const remember = defineModel<boolean>("remember", { required: true });
 const locale = useLocale();
+
+function onTokenPaste(event: ClipboardEvent) {
+  const pasted = event.clipboardData?.getData("text");
+  if (pasted === undefined) return;
+  event.preventDefault();
+  token.value = pasted;
+  void clearClipboard();
+}
+
+async function clearClipboard() {
+  try {
+    await navigator.clipboard.writeText("");
+    return;
+  } catch {
+    // Clipboard API can be unavailable or denied; fall back to a user-gesture copy.
+  }
+
+  try {
+    const fallback = document.createElement("textarea");
+    fallback.value = "";
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.appendChild(fallback);
+    fallback.select();
+    try {
+      document.execCommand("copy");
+    } finally {
+      fallback.remove();
+    }
+  } catch {
+    // Clipboard clearing is best-effort; authentication must still remain usable.
+  }
+}
 </script>
 
 <template>
@@ -100,6 +134,7 @@ const locale = useLocale();
           :label="locale.t('$vuetify.chatroom.auth.ownerToken')"
           prepend-inner-icon="mdi-key-outline"
           autocomplete="current-password"
+          @paste="onTokenPaste"
           @keyup.enter="emit('login')"
         />
         <v-checkbox

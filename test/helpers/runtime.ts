@@ -36,7 +36,6 @@ export async function createTestRuntime(
     server: { host: "127.0.0.1", port: options.port ?? 0 },
     auth: {
       localWebAuth: false,
-      ownerToken: "test-owner-token",
       mcpPublicBaseUrl: null,
       webPublicBaseUrl: null,
       allowedRedirectHosts: ["localhost", "127.0.0.1"],
@@ -59,7 +58,9 @@ export async function createTestRuntime(
     },
   };
   options.configure?.(config);
-  const components = await createApplication(config);
+  const components = await createApplication(config, {
+    ownerToken: "test-owner-token",
+  });
   return {
     root,
     workspaceRoot,

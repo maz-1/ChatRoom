@@ -31,7 +31,6 @@ export interface ChatRoomConfig {
   };
   auth: {
     localWebAuth: boolean;
-    ownerToken: string | null;
     mcpPublicBaseUrl: string | null;
     webPublicBaseUrl: string | null;
     allowedRedirectHosts: string[];

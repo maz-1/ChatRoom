@@ -34,6 +34,7 @@
     <Compile Include="..\ChatRoomConfigEditor\McpServerDialog.cs" Link="ConfigEditor\McpServerDialog.cs" />
     <Compile Include="..\ChatRoomConfigEditor\Models.cs" Link="ConfigEditor\Models.cs" />
     <Compile Include="..\ChatRoomConfigEditor\OwnerToken.cs" Link="ConfigEditor\OwnerToken.cs" />
+    <Compile Include="..\ChatRoomConfigEditor\OwnerTokenStore.cs" Link="ConfigEditor\OwnerTokenStore.cs" />
     <Compile Include="..\ChatRoomConfigEditor\TextInputDialog.cs" Link="ConfigEditor\TextInputDialog.cs" />
   </ItemGroup>
 

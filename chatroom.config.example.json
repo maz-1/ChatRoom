@@ -8,7 +8,6 @@
   },
   "auth": {
     "localWebAuth": false,
-    "ownerToken": null,
     "mcpPublicBaseUrl": null,
     "webPublicBaseUrl": null,
     "allowedRedirectHosts": ["chatgpt.com", "localhost", "127.0.0.1"]

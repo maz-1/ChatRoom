@@ -14,6 +14,7 @@ public partial class MainForm : Form
     private DateTime? _loadedLastWriteUtc;
     private string _snapshot = string.Empty;
     private List<ValidationIssue> _issues = new();
+    private string? _ownerToken;
 
     public MainForm()
     {
@@ -55,6 +56,7 @@ public partial class MainForm : Form
             if (!createWhenMissing)
             {
                 _config = ConfigStore.CreateDefault();
+                _ownerToken = OwnerTokenStore.Read(path);
                 _loadedLastWriteUtc = null;
                 _rootsList.Items.Clear();
                 foreach (var root in _config.AllowedRoots) _rootsList.Items.Add(root);
@@ -70,7 +72,8 @@ public partial class MainForm : Form
         {
             var loaded = ConfigStore.Load(path);
             _config = loaded.Config;
-            _loadedLastWriteUtc = loaded.LastWriteTimeUtc;
+            _ownerToken = LoadAndMigrateOwnerToken(path, loaded);
+            _loadedLastWriteUtc = File.GetLastWriteTimeUtc(path);
             LoadIntoUi();
             Snapshot();
             var unknown = loaded.UnknownKeys.Count == 0
@@ -88,6 +91,7 @@ public partial class MainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             _config = ConfigStore.CreateDefault();
+            _ownerToken = null;
             _loadedLastWriteUtc = null;
             LoadIntoUi();
             Snapshot();
@@ -161,10 +165,34 @@ public partial class MainForm : Form
 
     // ------------------------------------------------------------- owner token
 
+    private static string? LoadAndMigrateOwnerToken(string path, ConfigLoadResult loaded)
+    {
+        var stored = OwnerTokenStore.Read(path);
+        if (!loaded.HasLegacyOwnerToken) return stored;
+
+        var legacy = loaded.LegacyOwnerToken;
+        if (OwnerToken.IsPresent(legacy))
+        {
+            if (OwnerToken.IsPresent(stored) && !string.Equals(stored, legacy, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "config.json 中的旧 ownerToken 与 Windows 凭据管理器中的 ownerToken 不一致；为避免覆盖凭据，迁移已停止。");
+            if (!OwnerToken.IsPresent(stored))
+            {
+                OwnerTokenStore.Write(path, legacy!);
+                stored = OwnerTokenStore.Read(path);
+                if (!string.Equals(stored, legacy, StringComparison.Ordinal))
+                    throw new InvalidOperationException("ownerToken 写入 Windows 凭据管理器后校验失败。");
+            }
+        }
+
+        ConfigStore.RemoveLegacyOwnerToken(path, loaded.LastWriteTimeUtc);
+        return stored;
+    }
+
     private void RefreshTokenStatus()
     {
-        _tokenStatus.Text = OwnerToken.Describe(_config.Auth.OwnerToken);
-        var present = OwnerToken.IsPresent(_config.Auth.OwnerToken);
+        _tokenStatus.Text = OwnerToken.Describe(_ownerToken);
+        var present = OwnerToken.IsPresent(_ownerToken);
         _copyTokenButton.Enabled = present;
         _clearTokenButton.Enabled = present;
         _tokenStatus.ForeColor = present ? SystemColors.ControlText : Color.Firebrick;
@@ -172,19 +200,23 @@ public partial class MainForm : Form
 
     private void CopyOwnerToken()
     {
-        var token = _config.Auth.OwnerToken;
-        if (!OwnerToken.IsPresent(token)) return;
-
         try
         {
-            Clipboard.SetText(token!);
-            SetStatus("ownerToken 已复制到剪贴板（界面不会显示它的内容）");
+            _ownerToken = OwnerTokenStore.Read(_path);
+            if (!OwnerToken.IsPresent(_ownerToken))
+            {
+                RefreshTokenStatus();
+                return;
+            }
+            Clipboard.SetText(_ownerToken!);
+            RefreshTokenStatus();
+            SetStatus("ownerToken 已从 Windows 凭据管理器复制到剪贴板（界面不会显示它的内容）");
         }
         catch (Exception error)
         {
             MessageBox.Show(
                 this,
-                $"复制到剪贴板失败：{error.Message}",
+                $"复制 ownerToken 失败：{error.Message}",
                 "复制失败",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -195,9 +227,10 @@ public partial class MainForm : Form
     {
         var answer = MessageBox.Show(
             this,
-            "重新生成 ownerToken 会立即让所有已授权的客户端失效：\n\n" +
+            "重新生成 ownerToken 会更换系统凭据中的所有者令牌：\n\n" +
             "· ChatGPT 的自定义 MCP App 需要重新用新令牌完成 OAuth 授权\n" +
-            "· 已登录的 WebUI 会话需要重新登录\n\n" +
+            "· ChatRoom 重启后，旧 ownerToken 将不再可用于新的 WebUI 登录或 OAuth 授权\n" +
+            "· 当前已经签发的 OAuth access/refresh token 和 WebUI session 不会因为本操作被数据库级联撤销\n\n" +
             "新令牌不会显示在界面上，只能复制或重新生成。是否继续？",
             "重新生成 ownerToken",
             MessageBoxButtons.YesNo,
@@ -205,26 +238,82 @@ public partial class MainForm : Form
             MessageBoxDefaultButton.Button2);
         if (answer != DialogResult.Yes) return;
 
-        _config.Auth.OwnerToken = OwnerToken.Generate();
-        RefreshTokenStatus();
-        SetStatus("已生成新的 ownerToken；保存后生效，重启 ChatRoom 前旧令牌仍然有效");
+        try
+        {
+            var token = OwnerToken.Generate();
+            OwnerTokenStore.Write(_path, token);
+            _ownerToken = OwnerTokenStore.Read(_path);
+            if (!string.Equals(_ownerToken, token, StringComparison.Ordinal))
+                throw new InvalidOperationException("新 ownerToken 写入后校验失败。");
+            RefreshTokenStatus();
+            SetStatus("已重新生成 ownerToken 并写入 Windows 凭据管理器；重启 ChatRoom 后使用新令牌");
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(
+                this,
+                $"重新生成 ownerToken 失败：{error.Message}",
+                "生成失败",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private void ClearOwnerToken()
     {
+        ReadFromUi();
+        if (IsDirty())
+        {
+            MessageBox.Show(
+                this,
+                "清除 ownerToken 会立即修改 Windows 凭据管理器。请先保存当前配置修改，再执行清除。",
+                "请先保存配置",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+        if (RequiresOwnerToken(_config))
+        {
+            MessageBox.Show(
+                this,
+                "当前配置启用了需要认证的入口。请先关闭 localWebAuth / 公网地址并保存配置，再清除 ownerToken。",
+                "不能清除 ownerToken",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
         var answer = MessageBox.Show(
             this,
-            "清除 ownerToken 后，任何需要认证的入口都无法启动（ChatRoom 会拒绝启动）。\n\n是否继续？",
+            "这会立即从 Windows 凭据管理器删除当前配置对应的 ownerToken。\n\n是否继续？",
             "清除 ownerToken",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2);
         if (answer != DialogResult.Yes) return;
 
-        _config.Auth.OwnerToken = null;
-        RefreshTokenStatus();
-        SetStatus("已清除 ownerToken（若启用了认证入口，保存会被校验拦下）");
+        try
+        {
+            OwnerTokenStore.Delete(_path);
+            _ownerToken = null;
+            RefreshTokenStatus();
+            SetStatus("已从 Windows 凭据管理器清除 ownerToken");
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(
+                this,
+                $"清除 ownerToken 失败：{error.Message}",
+                "清除失败",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
+
+    private static bool RequiresOwnerToken(ChatRoomConfig config) =>
+        config.Auth.LocalWebAuth
+        || !string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl)
+        || !string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl);
 
     // ------------------------------------------------------------------- mcp
 
@@ -400,14 +489,20 @@ public partial class MainForm : Form
         if (!ConfirmDiscardChanges("新建默认配置")) return;
 
         _config = ConfigStore.CreateDefault();
-        _loadedLastWriteUtc = null;
-        LoadIntoUi();
         _path = ConfigPaths.DefaultConfigPath();
         _pathBox.Text = _path;
+        _ownerToken = OwnerTokenStore.Read(_path);
+        _loadedLastWriteUtc = null;
+        LoadIntoUi();
         Snapshot();
-        _issues = ConfigValidator.Validate(_config, Array.Empty<string>());
+        _issues = ConfigValidator.Validate(
+            _config,
+            Array.Empty<string>(),
+            OwnerToken.IsPresent(_ownerToken));
         RenderIssues();
-        SetStatus("已载入默认配置；ownerToken 为空，需要生成或填写后才能保存");
+        SetStatus(OwnerToken.IsPresent(_ownerToken)
+            ? "已载入默认配置；ownerToken 已存在于 Windows 凭据管理器"
+            : "已载入默认配置；ownerToken 尚未生成");
     }
 
     private void OpenConfiguration()
@@ -474,17 +569,46 @@ public partial class MainForm : Form
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
+        string? targetPath = null;
+        var rollbackTargetToken = false;
         try
         {
-            ConfigStore.Save(dialog.FileName, _config);
-            _path = dialog.FileName;
+            targetPath = Path.GetFullPath(dialog.FileName);
+            _ownerToken = OwnerTokenStore.Read(_path);
+            var targetToken = OwnerTokenStore.Read(targetPath);
+            if (OwnerToken.IsPresent(_ownerToken))
+            {
+                if (OwnerToken.IsPresent(targetToken)
+                    && !string.Equals(targetToken, _ownerToken, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "目标配置路径已经绑定了不同的 ownerToken。为避免覆盖系统凭据，请选择其他文件名，或先打开目标配置后处理其令牌。");
+                if (!OwnerToken.IsPresent(targetToken))
+                {
+                    OwnerTokenStore.Write(targetPath, _ownerToken!);
+                    rollbackTargetToken = true;
+                    targetToken = OwnerTokenStore.Read(targetPath);
+                    if (!string.Equals(targetToken, _ownerToken, StringComparison.Ordinal))
+                        throw new InvalidOperationException("另存为目标的 ownerToken 写入后校验失败。");
+                }
+            }
+
+            ConfigStore.Save(targetPath, _config);
+            rollbackTargetToken = false;
+            _path = targetPath;
             _pathBox.Text = _path;
+            _ownerToken = targetToken;
             _loadedLastWriteUtc = File.GetLastWriteTimeUtc(_path);
+            RefreshTokenStatus();
             Snapshot();
-            SetStatus($"已另存为 {_path}");
+            SetStatus($"已另存为 {_path}；ownerToken 由 Windows 凭据管理器按配置路径管理");
         }
         catch (Exception error)
         {
+            if (rollbackTargetToken && targetPath is not null)
+            {
+                try { OwnerTokenStore.Delete(targetPath); }
+                catch { /* Preserve the original save error; the target credential can be cleaned manually. */ }
+            }
             MessageBox.Show(this, error.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -493,7 +617,7 @@ public partial class MainForm : Form
     private bool ApplyUiToConfig()
     {
         ReadFromUi();
-        _issues = ConfigValidator.Validate(_config, Array.Empty<string>());
+        _issues = ValidateCurrentConfig();
         RenderIssues();
 
         var errors = _issues.Count(issue => issue.Severity == IssueSeverity.Error);
@@ -523,10 +647,48 @@ public partial class MainForm : Form
         return true;
     }
 
+    private List<ValidationIssue> ValidateCurrentConfig()
+    {
+        var requiresToken = RequiresOwnerToken(_config);
+        var tokenPresent = false;
+        string? credentialError = null;
+        try
+        {
+            _ownerToken = OwnerTokenStore.Read(_path);
+            tokenPresent = OwnerToken.IsPresent(_ownerToken);
+            RefreshTokenStatus();
+        }
+        catch (Exception error)
+        {
+            credentialError = error.Message;
+        }
+
+        // If the store itself cannot be read, replace the generic "missing token"
+        // error with a more precise credential-store error. For a local-only
+        // configuration this remains a warning, matching ChatRoom runtime behavior.
+        var tokenPresentForRules = credentialError is not null && requiresToken
+            ? true
+            : tokenPresent;
+        var issues = ConfigValidator.Validate(
+            _config,
+            Array.Empty<string>(),
+            tokenPresentForRules);
+        if (credentialError is not null)
+        {
+            issues.Add(new ValidationIssue(
+                requiresToken ? IssueSeverity.Error : IssueSeverity.Warning,
+                "ownerToken",
+                requiresToken
+                    ? $"无法读取 Windows 凭据管理器，而当前配置需要 ownerToken：{credentialError}"
+                    : $"暂时无法读取 Windows 凭据管理器；当前纯本地配置不依赖 ownerToken：{credentialError}"));
+        }
+        return issues;
+    }
+
     private void RunValidation(bool showStatus)
     {
         ReadFromUi();
-        _issues = ConfigValidator.Validate(_config, Array.Empty<string>());
+        _issues = ValidateCurrentConfig();
         RenderIssues();
 
         var errors = _issues.Count(issue => issue.Severity == IssueSeverity.Error);

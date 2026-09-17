@@ -297,6 +297,25 @@ test("OAuth client registration logs accepted and rejected remote requests", asy
       }),
     });
     assert.equal(accepted.status, 201);
+    const registered = JSON.parse(accepted.body) as { client_id: string };
+    const authorizeParams = new URLSearchParams({
+      response_type: "code",
+      client_id: registered.client_id,
+      redirect_uri: "http://127.0.0.1/callback",
+      code_challenge: "A".repeat(43),
+      code_challenge_method: "S256",
+      scope: "mcp",
+    });
+    const authorization = await requestWithHost(
+      address.port,
+      `/oauth/authorize?${authorizeParams}`,
+      { method: "GET", host: "mcp.example.com" },
+    );
+    assert.equal(authorization.status, 200);
+    assert.match(authorization.body, /addEventListener\("paste"/);
+    assert.match(authorization.body, /event\.preventDefault\(\)/);
+    assert.match(authorization.body, /navigator\.clipboard\.writeText\(""\)/);
+
     assert.equal(acceptedLogs.length, 1);
     assert.equal(
       acceptedLogs[0]?.[0],

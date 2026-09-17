@@ -53,3 +53,15 @@ export function platformPaths(
 function absoluteXdg(value: string | undefined): string | null {
   return value && path.posix.isAbsolute(value) ? value : null;
 }
+
+export interface PlatformSecurityDefaults {
+  caseFoldCredentialPaths: boolean;
+}
+
+export function platformSecurityDefaults(
+  platform = process.platform,
+): PlatformSecurityDefaults {
+  return {
+    caseFoldCredentialPaths: platform === "win32",
+  };
+}

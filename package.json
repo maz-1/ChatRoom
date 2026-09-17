@@ -29,6 +29,7 @@
     "clean:all": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@github/keytar": "^7.10.6",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
@@ -80,6 +81,7 @@
     "chatroom.config.example.json"
   ],
   "allowScripts": {
+    "@github/keytar@7.10.6": true,
     "esbuild@0.28.2": true,
     "node-pty@1.1.0": true
   }

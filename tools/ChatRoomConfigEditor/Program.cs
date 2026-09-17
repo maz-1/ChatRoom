@@ -84,14 +84,18 @@ internal static class Program
         try
         {
             var loaded = ConfigStore.Load(path);
-            var issues = ConfigValidator.Validate(loaded.Config, loaded.UnknownKeys);
+            var token = OwnerTokenStore.Read(path) ?? loaded.LegacyOwnerToken;
+            var issues = ConfigValidator.Validate(
+                loaded.Config,
+                loaded.UnknownKeys,
+                OwnerToken.IsPresent(token));
             var errors = issues.Count(issue => issue.Severity == IssueSeverity.Error);
             var warnings = issues.Count - errors;
 
             output.AppendLine($"配置文件：{path}");
             output.AppendLine($"服务：{loaded.Config.Server.Host}:{loaded.Config.Server.Port}");
             output.AppendLine($"MCP 服务：{loaded.Config.Mcp.Servers.Count} 个");
-            output.AppendLine($"ownerToken：{OwnerToken.Describe(loaded.Config.Auth.OwnerToken)}");
+            output.AppendLine($"ownerToken：{OwnerToken.Describe(token)}");
             output.AppendLine($"错误 {errors} 项，警告 {warnings} 项");
             foreach (var issue in issues)
                 output.AppendLine($"  [{(issue.Severity == IssueSeverity.Error ? "错误" : "警告")}] {issue.Path}: {issue.Message}");
@@ -133,9 +137,9 @@ internal static class Program
             Application.SetCompatibleTextRenderingDefault(false);
 
             var configPath = ConfigPaths.DefaultConfigPath();
-            string? token = null;
-            if (File.Exists(configPath))
-                token = ConfigStore.Load(configPath).Config.Auth.OwnerToken;
+            string? token = OwnerTokenStore.Read(configPath);
+            if (!OwnerToken.IsPresent(token) && File.Exists(configPath))
+                token = ConfigStore.Load(configPath).LegacyOwnerToken;
 
             using var form = new MainForm();
             // Shown off-screen so every tab really lays out; a hidden form leaves
@@ -451,29 +455,40 @@ internal static class Program
         Check("令牌提示不泄漏内容", OwnerToken.Describe(token) == "已设置 · 43 个字符", OwnerToken.Describe(token));
 
         var defaults = ConfigStore.CreateDefault();
-        var defaultIssues = ConfigValidator.Validate(defaults, Array.Empty<string>());
+        var defaultIssues = ConfigValidator.Validate(
+            defaults,
+            Array.Empty<string>(),
+            ownerTokenPresent: false);
         Check(
             "默认配置本身校验通过",
             !ConfigValidator.HasErrors(defaultIssues),
             string.Join("; ", defaultIssues.Select(i => $"{i.Path}: {i.Message}")));
 
-        // Security rule 1: an authenticated ingress requires an owner token.
+        // Security rule 1: an authenticated ingress requires an owner token in the credential store.
         defaults.Auth.WebPublicBaseUrl = "https://chatroom.example.com";
-        var missingToken = ConfigValidator.Validate(defaults, Array.Empty<string>())
+        var missingToken = ConfigValidator.Validate(
+                defaults,
+                Array.Empty<string>(),
+                ownerTokenPresent: false)
             .Where(i => i.Severity == IssueSeverity.Error).ToList();
         Check(
-            "启用公网地址但缺令牌 → 报 auth.ownerToken",
-            missingToken.Count == 1 && missingToken[0].Path == "auth.ownerToken",
+            "启用公网地址但缺令牌 → 报 ownerToken",
+            missingToken.Count == 1 && missingToken[0].Path == "ownerToken",
             string.Join("; ", missingToken.Select(i => $"{i.Path}: {i.Message}")));
 
-        defaults.Auth.OwnerToken = OwnerToken.Generate();
         Check(
-            "补上令牌后通过",
-            !ConfigValidator.HasErrors(ConfigValidator.Validate(defaults, Array.Empty<string>())));
+            "凭据管理器存在令牌后通过",
+            !ConfigValidator.HasErrors(ConfigValidator.Validate(
+                defaults,
+                Array.Empty<string>(),
+                ownerTokenPresent: true)));
 
         // Security rule 2: binding beyond loopback requires localWebAuth.
         defaults.Server.Host = "0.0.0.0";
-        var nonLoopback = ConfigValidator.Validate(defaults, Array.Empty<string>())
+        var nonLoopback = ConfigValidator.Validate(
+                defaults,
+                Array.Empty<string>(),
+                ownerTokenPresent: true)
             .Where(i => i.Severity == IssueSeverity.Error).ToList();
         Check(
             "非回环地址且未开 localWebAuth → 报 server.host",
@@ -482,7 +497,10 @@ internal static class Program
 
         // Strict schema: unknown keys are errors, exactly like ChatRoom's zod.
         defaults.Server.Host = "127.0.0.1";
-        var unknown = ConfigValidator.Validate(defaults, new[] { "surprise" })
+        var unknown = ConfigValidator.Validate(
+                defaults,
+                new[] { "surprise" },
+                ownerTokenPresent: true)
             .Where(i => i.Severity == IssueSeverity.Error).ToList();
         Check("未知字段被报错", unknown.Count == 1 && unknown[0].Path == "surprise");
 
@@ -508,7 +526,6 @@ internal static class Program
 
             // A minimal config exercising both transports survives a round trip.
             var edge = ConfigStore.CreateDefault();
-            edge.Auth.OwnerToken = OwnerToken.Generate();
             edge.Mcp.Servers["local"] = new StdioMcpServerConfig
             {
                 Command = "npx",

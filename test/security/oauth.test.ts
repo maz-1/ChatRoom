@@ -14,13 +14,17 @@ test("OAuth authorization code uses PKCE, hashing, expiry model and one-time con
   const db = new AppDatabase(path.join(dir, "auth.sqlite"));
   try {
     const repository = new OAuthRepository(db);
-    const auth = new AuthService(repository, new WebSessionRepository(db), {
-      localWebAuth: false,
-      ownerToken: "owner-secret",
-      mcpPublicBaseUrl: null,
-      webPublicBaseUrl: null,
-      allowedRedirectHosts: ["127.0.0.1"],
-    });
+    const auth = new AuthService(
+      repository,
+      new WebSessionRepository(db),
+      {
+        localWebAuth: false,
+        mcpPublicBaseUrl: null,
+        webPublicBaseUrl: null,
+        allowedRedirectHosts: ["127.0.0.1"],
+      },
+      "owner-secret",
+    );
     const client = auth.registerClient("Test MCP", [
       "http://127.0.0.1/callback",
     ]);

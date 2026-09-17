@@ -55,17 +55,13 @@ public sealed class AuthSection
     [JsonProperty("localWebAuth", Order = 1)]
     public bool LocalWebAuth { get; set; }
 
-    /// <summary>Never shown in the editor UI; only copied or regenerated.</summary>
-    [JsonProperty("ownerToken", Order = 2)]
-    public string? OwnerToken { get; set; }
-
-    [JsonProperty("mcpPublicBaseUrl", Order = 3)]
+    [JsonProperty("mcpPublicBaseUrl", Order = 2)]
     public string? McpPublicBaseUrl { get; set; }
 
-    [JsonProperty("webPublicBaseUrl", Order = 4)]
+    [JsonProperty("webPublicBaseUrl", Order = 3)]
     public string? WebPublicBaseUrl { get; set; }
 
-    [JsonProperty("allowedRedirectHosts", Order = 5)]
+    [JsonProperty("allowedRedirectHosts", Order = 4)]
     public List<string> AllowedRedirectHosts { get; set; } = new List<string>();
 }
 

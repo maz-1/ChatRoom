@@ -24,6 +24,7 @@ export class AuthService {
     private readonly repository: OAuthStateRepository,
     private readonly sessions: WebSessionRepository,
     private readonly config: ChatRoomConfig["auth"],
+    private readonly ownerToken: string | null,
   ) {
     const now = new Date().toISOString();
     repository.prune(now);
@@ -31,9 +32,9 @@ export class AuthService {
   }
 
   private verifyOwnerToken(value: string): boolean {
-    if (!this.config.ownerToken) return false;
+    if (!this.ownerToken) return false;
     // Hash to fixed-length inputs before timingSafeEqual so differing token lengths do not short-circuit comparison.
-    return safeEqual(digest(value), digest(this.config.ownerToken));
+    return safeEqual(digest(value), digest(this.ownerToken));
   }
 
   registerClient(name: string, redirectUris: string[]) {

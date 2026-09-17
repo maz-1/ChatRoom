@@ -241,6 +241,42 @@ function authorizationPage(request: AuthorizationRequest): string {
     <input id="owner_token" name="owner_token" type="password" autocomplete="current-password" required>
     <button type="submit">Authorize</button>
   </form>
+  <script>
+    const ownerToken = document.getElementById("owner_token");
+    ownerToken.addEventListener("paste", (event) => {
+      const pasted = event.clipboardData?.getData("text");
+      if (pasted === undefined) return;
+      event.preventDefault();
+      ownerToken.value = pasted;
+      void clearClipboard();
+    });
+
+    async function clearClipboard() {
+      try {
+        await navigator.clipboard.writeText("");
+        return;
+      } catch {
+        // Clipboard API can be unavailable or denied; fall back to a user-gesture copy.
+      }
+
+      try {
+        const fallback = document.createElement("textarea");
+        fallback.value = "";
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.appendChild(fallback);
+        fallback.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          fallback.remove();
+        }
+      } catch {
+        // Clipboard clearing is best-effort; authorization must still remain usable.
+      }
+    }
+  </script>
 </body>
 </html>`;
 }

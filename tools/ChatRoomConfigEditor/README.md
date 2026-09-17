@@ -31,12 +31,12 @@ dotnet run
 
 ## 能编辑的内容
 
-覆盖配置文件里的**全部**选项，按标签页分组：
+覆盖配置文件里的**全部**选项，并额外管理系统凭据库中的 `ownerToken`，按标签页分组：
 
-| 标签页 | 覆盖字段 |
+| 标签页 | 覆盖内容 |
 | --- | --- |
 | 工作区与路径 | `allowedRoots`（增删改）、`dataDir`、`databasePath` |
-| 服务与认证 | `server.host` / `server.port`、`auth.localWebAuth`、`ownerToken`、`mcpPublicBaseUrl`、`webPublicBaseUrl`、`allowedRedirectHosts` |
+| 服务与认证 | `server.host` / `server.port`、`auth.localWebAuth`、`mcpPublicBaseUrl`、`webPublicBaseUrl`、`allowedRedirectHosts`，以及系统凭据库中的 `ownerToken` |
 | 限额 | `http.*`、`operations.maxPayloadBytes`、`process.*`、`mcp.callTimeoutMs`、`mcp.maxResultBytes` |
 | MCP 服务 | `mcp.servers` 的**增删改**：`stdio`（命令/参数/环境变量/工作目录）与 `http`（URL/请求头/代理） |
 
@@ -45,11 +45,14 @@ dotnet run
 
 ## ownerToken 的处理
 
-按需求，令牌**不会显示在界面上**，任何控件都不包含它的内容（这一点由自检断言保证）。可用的操作：
+`ownerToken` 已不再写入 `config.json`，而是按配置文件路径保存在 **Windows Credential Manager** 中。令牌**不会显示在界面上**，任何控件都不包含它的内容（这一点由自检断言保证）。可用的操作：
 
-- **复制**：写入剪贴板，界面只提示“已复制”，状态行显示为 `已设置 · N 个字符`
-- **重新生成**：生成与 `chatroom init` 相同的 32 字节 base64url 令牌（43 字符），操作前会明确警告“已授权的 ChatGPT 客户端与 WebUI 会话需要重新授权”
-- **清除**：置为 `null`（若启用了需要认证的入口，保存会被校验拦下）
+- **复制**：从 Windows Credential Manager 重新读取后写入剪贴板，界面只提示“已复制”，状态行显示为 `已设置 · N 个字符`
+- **重新生成**：生成与 `chatroom init` 相同的 32 字节 base64url 令牌（43 字符），立即写入系统凭据库并回读校验；正在运行的 ChatRoom 仍使用启动时加载到内存中的旧值，因此需要重启后才使用新值
+- **清除**：从 Windows Credential Manager 删除；只有在配置文件已经关闭所有需要认证的入口后才允许清除
+- **旧配置迁移**：打开仍含 `auth.ownerToken` 的旧配置时，先写入系统凭据库并回读验证，成功后再从 JSON 中删除明文字段；若系统凭据中已有不同值则拒绝覆盖
+
+重新生成 `ownerToken` 本身**不会级联撤销** SQLite 中已经签发的 OAuth access/refresh token 或现有 WebUI session；它影响的是重启后的 owner-token 登录和新的 OAuth 授权确认。
 
 ## 安全设计
 
@@ -57,7 +60,7 @@ dotnet run
 
 1. **校验规则与 ChatRoom 完全一致**：逐条复刻 `src/config/load-config.ts` 的 zod 规则（含各字段取值范围、`mcp` 服务名正则、URL/代理格式）以及 `validateRuntimeSecurity` 的两条运行时约束：
    - 绑定非回环地址时必须开启 `localWebAuth`
-   - 启用任何认证入口（`localWebAuth` / 公网地址）时必须存在 `ownerToken`
+   - 启用任何认证入口（`localWebAuth` / 公网地址）时，系统凭据库中必须存在与当前配置路径对应的 `ownerToken`
 2. **存在错误则拒绝保存**，错误逐项列在“校验结果”面板中
 3. **严格模式**：ChatRoom 的 schema 是 strict 的，未知字段会导致启动失败；编辑器会识别并报错（新增字段时会移除）
 4. **原子写入**：先写同目录临时文件，再替换目标文件
@@ -94,4 +97,4 @@ Start-Process $exe -ArgumentList '--uismoke','--report','uismoke.txt' -Wait -NoN
 - **保存会规范化格式**：输出为 2 空格缩进、键顺序固定。手工的制表符缩进/对齐风格会被改写。
 - **缺省段会被补齐**：例如原本没有 `http` 段时，保存后会写入 ChatRoom 的默认值（数值与 `defaultConfig()` 一致，行为不变）。
 - **`env` / `headers` 里的密钥以明文保存在配置文件中**（与 ChatRoom 本身的做法一致；该文件位于用户配置目录）。编辑器不会把它们显示在令牌那类“脱敏”位置——因为对 MCP 服务而言它们是必要的配置内容。
-- **本工具只改配置文件**：不会重启 ChatRoom，也不会碰数据库与 Cloud 状态。
+- **本工具会修改两类本地状态**：普通设置写入配置文件；`ownerToken` 只读写 Windows Credential Manager。工具不会重启 ChatRoom，也不会修改数据库或 Cloud 状态。

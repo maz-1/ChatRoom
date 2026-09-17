@@ -35,7 +35,7 @@ MCP    http://127.0.0.1:8765/mcp
 
 ChatGPT 通过 MCP Endpoint 连接 ChatRoom。需要远程访问时，可以直接在 WebUI 中启用 ChatRoom Cloud，也可以自行通过 HTTPS 将 ChatRoom 暴露到公网，并配置对应的公网地址。
 
-在 ChatGPT Developer Mode 中创建自定义 MCP App，填写 ChatRoom 的 `/mcp` 地址，并使用[配置文件](https://doc.chatroomcp.com/zh/configuration)中的 `ownerToken` 完成 OAuth 授权。
+在 ChatGPT Developer Mode 中创建自定义 MCP App，填写 ChatRoom 的 `/mcp` 地址，并使用系统凭据库中保存的 owner token 完成 OAuth 授权。只有在明确需要查看令牌时才运行 `chatroom auth token`。
 
 当前 ChatGPT 接入流程见：[在 ChatGPT 中使用 ChatRoom](https://doc.chatroomcp.com/zh/chatgpt)。
 
