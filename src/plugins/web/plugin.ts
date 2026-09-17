@@ -24,6 +24,7 @@ export function createWebPlugin(): InternalPlugin {
           context.services.require(ProcessService),
           context.services.require(ComputerServiceToken),
           context.services.require(McpProxyServiceToken),
+          context.mcpTools,
         ),
       });
     },

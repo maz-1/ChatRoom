@@ -15,6 +15,7 @@ import WorkspacesView from "./components/WorkspacesView.vue";
 import ProcessesView from "./components/ProcessesView.vue";
 import CloudView from "./components/CloudView.vue";
 import ComputerView from "./components/ComputerView.vue";
+import McpToolsView from "./components/McpToolsView.vue";
 import McpServersView from "./components/McpServersView.vue";
 
 type View =
@@ -22,6 +23,7 @@ type View =
   | "processes"
   | "computer"
   | "mcp-servers"
+  | "tools"
   | "cloud"
   | "operations";
 type ThemeMode = "system" | "light" | "dark";
@@ -110,6 +112,7 @@ const currentComponent = computed(
       processes: ProcessesView,
       computer: ComputerView,
       "mcp-servers": McpServersView,
+      tools: McpToolsView,
       cloud: CloudView,
       operations: OperationsView,
     })[view.value],
@@ -536,7 +539,7 @@ async function removePasskey(id: string) {
               </template>
               <v-list density="compact" min-width="160">
                 <v-list-item
-                  title="简体中文"
+                  title="Simplified Chinese"
                   :active="locale.current.value === 'zhHans'"
                   @click="setLocale('zhHans')"
                 />
