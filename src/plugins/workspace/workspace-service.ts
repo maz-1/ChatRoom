@@ -48,16 +48,10 @@ export class WorkspaceService {
         continue;
       }
       for (const entry of entries) {
-        if (
-          !entry.isDirectory() ||
-          entry.isSymbolicLink() ||
-          entry.name.startsWith(".")
-        )
-          continue;
-        const candidate = await realpath(
-          path.join(allowedRoot, entry.name),
-        ).catch(() => null);
-        if (candidate && this.isWorkspaceRoot(candidate)) roots.add(candidate);
+        if (entry.name.startsWith(".")) continue;
+        const candidate = path.join(allowedRoot, entry.name);
+        const info = await stat(candidate).catch(() => null);
+        if (info?.isDirectory()) roots.add(candidate);
       }
     }
 
@@ -78,7 +72,16 @@ export class WorkspaceService {
   async resolve(input: string): Promise<string> {
     if (typeof input !== "string" || !input.trim())
       throw new ChatRoomError("INVALID_INPUT", "Workspace root is required");
-    const canonical = await realpath(expandHome(input)).catch(() => {
+    const requested = path.resolve(expandHome(input));
+    const parent = await realpath(path.dirname(requested)).catch(() => null);
+    if (!parent || !this.allowedRoots.includes(parent))
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        "Workspace must be a direct child of a configured allowed root",
+        { root: requested },
+      );
+    const workspaceRoot = path.join(parent, path.basename(requested));
+    const canonical = await realpath(workspaceRoot).catch(() => {
       throw new ChatRoomError(
         "NOT_FOUND",
         `Workspace root does not exist: ${input}`,
@@ -89,13 +92,7 @@ export class WorkspaceService {
         "INVALID_INPUT",
         `Workspace root is not a directory: ${input}`,
       );
-    if (!this.isWorkspaceRoot(canonical))
-      throw new ChatRoomError(
-        "FORBIDDEN",
-        "Workspace must be a direct child of a configured allowed root",
-        { root: canonical },
-      );
-    return canonical;
+    return workspaceRoot;
   }
 
   async createProject(
@@ -141,10 +138,6 @@ export class WorkspaceService {
 
   async fs(input: string): Promise<WorkspaceFs> {
     return WorkspaceFs.create(await this.resolve(input));
-  }
-
-  private isWorkspaceRoot(candidate: string): boolean {
-    return this.allowedRoots.some((root) => path.dirname(candidate) === root);
   }
 
   private async resolveAllowedRoot(input: string): Promise<string> {
