@@ -74,7 +74,10 @@ export interface ComputerSnapshot {
   activeWindow: string | null;
   cursor: { x: number; y: number } | null;
   elements: ComputerElement[];
-  screenshot?: { mimeType: "image/jpeg" | "image/png"; data: string };
+  screenshot?: {
+    mimeType: "image/jpeg" | "image/png" | "image/webp";
+    data: string;
+  };
 }
 
 export type ComputerAction =

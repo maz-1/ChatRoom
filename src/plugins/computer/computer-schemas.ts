@@ -30,7 +30,7 @@ export const computerElementSchema = z.object({
 });
 
 export const computerScreenshotSchema = z.object({
-  mimeType: z.enum(["image/jpeg", "image/png"]),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
   data: z.string(),
 });
 

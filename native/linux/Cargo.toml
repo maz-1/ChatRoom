@@ -9,6 +9,7 @@ atspi = "0.30"
 base64 = "0.22"
 futures-lite = "2"
 png = "0.17"
+webp = { version = "0.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
