@@ -7,7 +7,10 @@ import type {
   GitStatus,
 } from "../git/types.js";
 import type { ProcessSnapshot } from "../process/types.js";
-import type { McpServerDetail, McpToolSummary } from "../mcp-proxy/types.js";
+import type {
+  McpServerDetail,
+  McpToolSummary as McpProxyToolSummary,
+} from "../mcp-proxy/types.js";
 import type {
   ComputerDisplay,
   ComputerPermission,
@@ -30,8 +33,8 @@ export type {
   GitCommit,
   GitDiff,
   GitStatus,
+  McpProxyToolSummary,
   McpServerDetail,
-  McpToolSummary,
   ProcessSnapshot,
   WorkspaceEntry,
   WorkspaceFile,
@@ -53,8 +56,90 @@ export interface ComputerPreviewView {
 
 export type Operation = DomainOperation;
 
-/** MCP server view: definitions live in config; enabled state is stored locally. */
+export interface AuthStatus {
+  authenticated: boolean;
+  passkeyAvailable: boolean;
+  passkeyRegistered: boolean;
+}
+
+export interface PasskeySummary {
+  id: string;
+  name: string;
+  lastUsedAt: string;
+}
+
+export interface RuntimeStatus {
+  version: string;
+  mcpRequests: number;
+  uptimeMinutes: number;
+}
+
+export interface UpdateStatus {
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+}
+
+export interface McpToolSummary {
+  name: string;
+  pluginId: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+}
+
+/** MCP bridge view: definitions live in config; enabled state is stored locally. */
 export interface McpServersView {
   configPath: string;
   servers: McpServerDetail[];
+}
+
+export type CloudService = "remote_mcp" | "remote_web";
+
+export interface CloudStatus {
+  installationId: string | null;
+  customerId: string | null;
+  publicPrefix: string | null;
+  desiredServices: Record<CloudService, boolean>;
+  entitlements: Array<{
+    service: CloudService;
+    status: "active";
+    sourceProvider: string;
+    sourceId: string;
+    validUntil: string | null;
+  }>;
+  managementSessionActive: boolean;
+  connection:
+    "inactive" | "connecting" | "connected" | "disconnected" | "error";
+  mcpUrl: string | null;
+  webUrl: string | null;
+  lastError: string | null;
+}
+export interface WorkspaceFileContent {
+  content: string;
+}
+
+export interface CloudManagementSession {
+  url: string;
+}
+
+export interface CloudRestoreResult {
+  status: CloudStatus;
+}
+
+export type SystemLogLevel = "debug" | "info" | "warn" | "error";
+
+export interface SystemLogRecord {
+  id: string;
+  timestamp: string;
+  level: SystemLogLevel;
+  module: string;
+  event: string;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+export interface SystemLogPage {
+  items: SystemLogRecord[];
+  nextBefore: string | null;
 }

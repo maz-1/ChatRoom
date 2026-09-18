@@ -1,4 +1,6 @@
 import type { ChatRoomConfig } from "../config/types.js";
+import { CHATROOM_VERSION } from "../core/runtime/identity.js";
+import { SystemLogger } from "../infrastructure/logging/logger.js";
 import {
   createApplication,
   type ApplicationComponents,
@@ -8,23 +10,50 @@ import {
 export class ApplicationLifecycle {
   private components: ApplicationComponents | null = null;
   private shuttingDown: Promise<void> | null = null;
+  private readonly logger: SystemLogger;
+
   constructor(
     private readonly config: ChatRoomConfig,
     private readonly secrets: RuntimeSecrets,
-  ) {}
+  ) {
+    this.logger = new SystemLogger(config.dataDir);
+  }
 
   async start(): Promise<ApplicationComponents> {
     if (this.components) return this.components;
-    const components = await createApplication(this.config, this.secrets);
+    this.logger.info("app", "app.starting", "ChatRoom is starting", {
+      version: CHATROOM_VERSION,
+    });
+    let components: ApplicationComponents | null = null;
     try {
+      components = await createApplication(
+        this.config,
+        this.secrets,
+        this.logger,
+      );
       await components.http.start();
       await components.cloud.start();
       this.components = components;
+      this.logger.info("app", "app.started", "ChatRoom started", {
+        version: CHATROOM_VERSION,
+      });
       return components;
     } catch (error) {
-      await components.http.close().catch(() => undefined);
-      await components.plugins.stop().catch(() => undefined);
-      components.database.close();
+      this.logger.error("app", "app.start_failed", "ChatRoom failed to start", {
+        error,
+      });
+      if (components) {
+        try {
+          await cleanupComponents(components);
+        } catch (cleanupError) {
+          await this.logger.flush();
+          throw new AggregateError(
+            [error, cleanupError],
+            "Application startup failed and cleanup encountered errors",
+          );
+        }
+      }
+      await this.logger.flush();
       throw error;
     }
   }
@@ -38,9 +67,47 @@ export class ApplicationLifecycle {
   private async shutdownInternal(): Promise<void> {
     const components = this.components;
     if (!components) return;
-    await components.http.close();
-    await components.plugins.stop();
-    components.database.close();
     this.components = null;
+    this.logger.info("app", "app.stopping", "ChatRoom is stopping");
+    try {
+      await cleanupComponents(components);
+      this.logger.info("app", "app.stopped", "ChatRoom stopped");
+    } catch (error) {
+      this.logger.error(
+        "app",
+        "app.stop_failed",
+        "ChatRoom shutdown encountered errors",
+        {
+          error,
+        },
+      );
+      throw error;
+    } finally {
+      await this.logger.flush();
+    }
   }
+}
+
+async function cleanupComponents(
+  components: ApplicationComponents,
+): Promise<void> {
+  const errors: unknown[] = [];
+  try {
+    await components.http.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    await components.plugins.stop();
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    components.database.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1)
+    throw new AggregateError(errors, "Application shutdown encountered errors");
 }

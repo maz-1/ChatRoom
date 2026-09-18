@@ -72,6 +72,7 @@ export async function createTestRuntime(
       try {
         components.database.close();
       } catch {}
+      await components.logger.flush().catch(() => undefined);
       await rm(root, { recursive: true, force: true });
     },
   };

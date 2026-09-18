@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { useLocale } from "vuetify";
-import { api, type McpServersView, type McpToolSummary } from "../api.js";
+import { api, type McpProxyToolSummary, type McpServersView } from "../api.js";
 import CodeViewer from "./CodeViewer.vue";
 
 const props = defineProps<{ revision: number }>();
@@ -75,7 +75,7 @@ async function setEnabled(name: string, enabled: boolean): Promise<void> {
   }
 }
 
-function toolSchema(tool: McpToolSummary): string | null {
+function toolSchema(tool: McpProxyToolSummary): string | null {
   if (tool.inputSchema === null) return null;
   const properties = tool.inputSchema.properties;
   if (!properties || typeof properties !== "object") return null;

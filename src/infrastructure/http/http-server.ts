@@ -4,6 +4,7 @@ import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import express, { type RequestHandler } from "express";
+import compression from "compression";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { AuthInfo, McpHttpHandler } from "@modelcontextprotocol/server";
 import type { ChatRoomConfig } from "../../config/types.js";
@@ -19,6 +20,8 @@ import { errorMiddleware } from "../../presentation/http/http-utils.js";
 import { IngressPolicy } from "../../auth/ingress-policy.js";
 import { CHATROOM_VERSION } from "../../core/runtime/identity.js";
 import { runWithMcpAccessScope } from "../../mcp/server/request-context.js";
+import type { SystemLogger } from "../logging/logger.js";
+import type { SystemLogReader } from "../logging/log-reader.js";
 
 const WEB_UI_RESERVED_PREFIXES = [
   "/api",
@@ -43,6 +46,8 @@ export class HttpServer {
     private readonly mcp: McpHttpHandler,
     externalAccess: ExternalAccessRegistry,
     private readonly cloud: CloudController,
+    private readonly logger: SystemLogger,
+    private readonly logReader: SystemLogReader,
   ) {
     this.ingress = new IngressPolicy(config, externalAccess);
   }
@@ -52,9 +57,10 @@ export class HttpServer {
     app.disable("x-powered-by");
     app.set("trust proxy", false);
     app.use(hostValidation(this.ingress));
+    app.use(compression({ threshold: 1024 }));
     app.use(express.json({ limit: "2mb" }));
     app.use(express.urlencoded({ extended: false, limit: "64kb" }));
-    app.use(createOAuthRouter(this.auth, this.ingress));
+    app.use(createOAuthRouter(this.auth, this.ingress, this.logger));
     app.use("/api", webMutationOrigin(this.ingress));
     app.use(
       "/api",
@@ -65,6 +71,8 @@ export class HttpServer {
         this.passkeys,
         this.ingress,
         this.cloud,
+        this.logger,
+        this.logReader,
         () => ({
           version: CHATROOM_VERSION,
           mcpRequests: this.mcpRequestCount,
@@ -74,7 +82,8 @@ export class HttpServer {
     );
 
     const nodeMcp = toNodeHandler(this.mcp, {
-      onerror: (error) => console.error("[mcp]", error),
+      onerror: (error) =>
+        this.logger.error("mcp", "mcp.error", "MCP request failed", { error }),
     });
     app.all(
       "/mcp",
@@ -117,17 +126,33 @@ export class HttpServer {
     }
     app.use(errorMiddleware);
     this.server = createServer(app);
-    await new Promise<void>((resolve, reject) => {
-      this.server!.once("error", reject);
-      this.server!.listen(
-        this.config.server.port,
-        this.config.server.host,
-        () => {
-          this.server!.off("error", reject);
-          resolve();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.server!.once("error", reject);
+        this.server!.listen(
+          this.config.server.port,
+          this.config.server.host,
+          () => {
+            this.server!.off("error", reject);
+            resolve();
+          },
+        );
+      });
+      this.logger.info("http", "http.started", "HTTP server started", {
+        host: this.config.server.host,
+        port: this.config.server.port,
+      });
+    } catch (error) {
+      this.logger.error(
+        "http",
+        "http.start_failed",
+        "HTTP server failed to start",
+        {
+          error,
         },
       );
-    });
+      throw error;
+    }
   }
 
   address(): AddressInfo | null {
@@ -145,6 +170,7 @@ export class HttpServer {
     server.closeAllConnections();
     await closed;
     this.server = null;
+    this.logger.info("http", "http.stopped", "HTTP server stopped");
   }
 }
 
@@ -179,7 +205,7 @@ function webMutationOrigin(ingress: IngressPolicy): RequestHandler {
 function hostValidation(ingress: IngressPolicy): RequestHandler {
   return (req, res, next) => {
     const hostname = req.hostname;
-    if (!hostname || !ingress.allowedHosts().has(hostname)) {
+    if (!hostname || !ingress.allowsHost(hostname)) {
       res.status(403).json({
         error: { code: "FORBIDDEN", message: "Host header is not allowed" },
       });

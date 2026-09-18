@@ -4,6 +4,7 @@ import type {
   AuthorizationRequest,
 } from "../../auth/auth-service.js";
 import type { IngressPolicy } from "../../auth/ingress-policy.js";
+import type { SystemLogSink } from "../../core/logging/types.js";
 import {
   asChatRoomError,
   ChatRoomError,
@@ -13,6 +14,7 @@ import { escapeHtml, requireString } from "./http-utils.js";
 export function createOAuthRouter(
   auth: AuthService,
   ingress: IngressPolicy,
+  logger: SystemLogSink,
 ): Router {
   const router = Router();
   router.get("/.well-known/oauth-authorization-server", (req, res) =>
@@ -35,12 +37,18 @@ export function createOAuthRouter(
         )
       : [];
     const client = auth.registerClient(name, redirects);
-    console.info("[oauth] Remote server registration accepted", {
+    const registrationDetails = {
       ...registrationRequestDetails(req, ingress),
       clientName: name,
       redirectUris: redirects,
       clientId: client.client_id,
-    });
+    };
+    logger.info(
+      "auth",
+      "oauth.registration_accepted",
+      "OAuth client registration accepted",
+      registrationDetails,
+    );
     res.status(201).json(client);
   });
 
@@ -61,6 +69,9 @@ export function createOAuthRouter(
       request,
       requireString(body.owner_token, "owner_token"),
     );
+    logger.info("auth", "oauth.success", "OAuth authorization approved", {
+      flow: "authorization",
+    });
     const redirect = new URL(request.redirectUri);
     redirect.searchParams.set("code", code);
     if (request.state) redirect.searchParams.set("state", request.state);
@@ -86,6 +97,9 @@ export function createOAuthRouter(
     } else {
       throw new ChatRoomError("INVALID_INPUT", "Unsupported OAuth grant_type");
     }
+    logger.info("auth", "oauth.success", "OAuth token issued", {
+      flow: typeof body.grant_type === "string" ? body.grant_type : "unknown",
+    });
     res.setHeader("Cache-Control", "no-store");
     res.json(result);
   });
@@ -95,11 +109,14 @@ export function createOAuthRouter(
     if (token) auth.revoke(token);
     res.status(200).end();
   });
-  router.use(oauthErrorMiddleware(ingress));
+  router.use(oauthErrorMiddleware(logger, ingress));
   return router;
 }
 
-function oauthErrorMiddleware(ingress: IngressPolicy): ErrorRequestHandler {
+function oauthErrorMiddleware(
+  logger: SystemLogSink,
+  ingress: IngressPolicy,
+): ErrorRequestHandler {
   return (error, req, res, _next) => {
     const normalized = asChatRoomError(error);
     let code = "invalid_request";
@@ -111,26 +128,40 @@ function oauthErrorMiddleware(ingress: IngressPolicy): ErrorRequestHandler {
     )
       code = "invalid_redirect_uri";
     else if (normalized.code === "FORBIDDEN") code = "access_denied";
-    if (req.path === "/oauth/register") {
-      const body =
-        req.body && typeof req.body === "object"
-          ? (req.body as Record<string, unknown>)
-          : {};
-      console.warn("[oauth] Remote server registration rejected", {
-        ...registrationRequestDetails(req, ingress),
-        clientName:
-          typeof body.client_name === "string"
-            ? body.client_name
-            : "MCP Client",
-        redirectUris: Array.isArray(body.redirect_uris)
-          ? body.redirect_uris.filter(
-              (value): value is string => typeof value === "string",
-            )
-          : [],
-        error: normalized.code,
-        reason: normalized.message,
-      });
-    }
+
+    const registrationBody =
+      req.path === "/oauth/register" && req.body && typeof req.body === "object"
+        ? (req.body as Record<string, unknown>)
+        : null;
+    const logDetails = {
+      path: req.path,
+      reason: code,
+      ...(registrationBody
+        ? {
+            ...registrationRequestDetails(req, ingress),
+            clientName:
+              typeof registrationBody.client_name === "string"
+                ? registrationBody.client_name
+                : "MCP Client",
+            redirectUris: Array.isArray(registrationBody.redirect_uris)
+              ? registrationBody.redirect_uris.filter(
+                  (value): value is string => typeof value === "string",
+                )
+              : [],
+            error: normalized.code,
+            errorDescription: normalized.message,
+          }
+        : {}),
+    };
+    logger.warn(
+      "auth",
+      registrationBody ? "oauth.registration_rejected" : "oauth.failed",
+      registrationBody
+        ? "OAuth client registration rejected"
+        : "OAuth request failed",
+      logDetails,
+    );
+
     res.setHeader("Cache-Control", "no-store");
     res
       .status(400)
