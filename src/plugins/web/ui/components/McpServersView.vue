@@ -9,7 +9,6 @@ const props = defineProps<{ revision: number }>();
 const locale = useLocale();
 const payload = ref<McpServersView | null>(null);
 const selectedName = ref<string | null>(null);
-const error = ref("");
 const busy = ref(false);
 const toggleBusy = reactive(new Set<string>());
 
@@ -32,23 +31,21 @@ watch(
 
 async function load(): Promise<void> {
   try {
-    error.value = "";
     payload.value = await api<McpServersView>("/mcp/servers");
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    console.warn("[mcp] Failed to load server list", cause);
   }
 }
 
 async function refresh(server?: string): Promise<void> {
   busy.value = true;
   try {
-    error.value = "";
     payload.value = await api<McpServersView>("/mcp/servers/refresh", {
       method: "POST",
       body: JSON.stringify(server ? { server } : {}),
     });
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    console.warn("[mcp] Failed to refresh server list", cause);
   } finally {
     busy.value = false;
   }
@@ -58,7 +55,6 @@ async function setEnabled(name: string, enabled: boolean): Promise<void> {
   if (toggleBusy.has(name)) return;
   toggleBusy.add(name);
   try {
-    error.value = "";
     const updated = await api<McpServersView["servers"][number]>(
       `/mcp/servers/${encodeURIComponent(name)}`,
       {
@@ -73,7 +69,7 @@ async function setEnabled(name: string, enabled: boolean): Promise<void> {
       if (index >= 0) payload.value.servers[index] = updated;
     }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    console.warn(`[mcp] Failed to update server ${name}`, cause);
   } finally {
     toggleBusy.delete(name);
   }
@@ -133,16 +129,6 @@ function toolSchema(tool: McpToolSummary): string | null {
           </div>
         </div>
         <v-divider />
-
-        <v-alert
-          v-if="error"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="ma-3"
-        >
-          {{ error }}
-        </v-alert>
 
         <div v-if="servers.length" class="table-shell">
           <v-table density="comfortable" hover class="mcp-table">

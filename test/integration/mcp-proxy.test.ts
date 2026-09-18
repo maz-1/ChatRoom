@@ -168,6 +168,46 @@ test("mcp proxy discovers and calls upstream tools over stdio and http", async (
       unreachable.error,
       "an unreachable server must report why it failed",
     );
+
+    // An unreachable server gets five quick retries, then falls back to one
+    // retry per second. Repeated identical failures are collapsed as `x N`.
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const afterQuickRetries = await client.callTool({
+      name: "mcp_list_servers",
+      arguments: { server: "unreachable" },
+    });
+    const afterQuickError = (
+      afterQuickRetries.structuredContent as {
+        servers: { error: string | null }[];
+      }
+    ).servers[0]?.error;
+    assert.match(afterQuickError ?? "", / x [2-9]\d*$/);
+    const quickRetryCount = repeatedErrorCount(afterQuickError);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const beforeSteadyRetry = await client.callTool({
+      name: "mcp_list_servers",
+      arguments: { server: "unreachable" },
+    });
+    const beforeSteadyError = (
+      beforeSteadyRetry.structuredContent as {
+        servers: { error: string | null }[];
+      }
+    ).servers[0]?.error;
+    assert.equal(repeatedErrorCount(beforeSteadyError), quickRetryCount);
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const afterSteadyRetry = await client.callTool({
+      name: "mcp_list_servers",
+      arguments: { server: "unreachable" },
+    });
+    const afterSteadyError = (
+      afterSteadyRetry.structuredContent as {
+        servers: { error: string | null }[];
+      }
+    ).servers[0]?.error;
+    assert.equal(repeatedErrorCount(afterSteadyError), quickRetryCount + 1);
+
     const localTools = local.tools.map((tool) => tool.name).sort();
     assert.deepEqual(localTools, ["echo", "fail", "flood", "palette"]);
     assert.ok(
@@ -289,3 +329,9 @@ test("mcp proxy discovers and calls upstream tools over stdio and http", async (
     await upstream.close();
   }
 });
+
+function repeatedErrorCount(value: string | null | undefined): number {
+  if (!value) return 0;
+  const match = / x (\d+)$/.exec(value);
+  return match ? Number(match[1]) : 1;
+}

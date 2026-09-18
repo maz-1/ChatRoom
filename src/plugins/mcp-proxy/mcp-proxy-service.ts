@@ -27,6 +27,9 @@ import type {
 } from "./types.js";
 
 const STDERR_TAIL_BYTES = 8 * 1024;
+const QUICK_RETRY_ATTEMPTS = 5;
+const QUICK_RETRY_DELAY_MS = 100;
+const STEADY_RETRY_DELAY_MS = 1000;
 
 export interface McpServerSettingStore {
   disabledServers(): string[];
@@ -41,6 +44,10 @@ interface ServerState {
   tools: Tool[] | null;
   status: "idle" | "connected" | "error";
   error: string | null;
+  lastErrorMessage: string | null;
+  errorRepeatCount: number;
+  consecutiveFailures: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
   connecting: Promise<void> | null;
   closing: boolean;
   stderrTail: string;
@@ -65,6 +72,10 @@ export class McpProxyService {
         tools: null,
         status: "idle",
         error: null,
+        lastErrorMessage: null,
+        errorRepeatCount: 0,
+        consecutiveFailures: 0,
+        retryTimer: null,
         connecting: null,
         closing: false,
         stderrTail: "",
@@ -173,7 +184,8 @@ export class McpProxyService {
         await this.close(state);
       } else {
         state.status = "idle";
-        state.error = null;
+        state.stderrTail = "";
+        this.resetRetryState(state);
       }
       this.events.emit({ type: "mcp-servers" });
     }
@@ -216,10 +228,12 @@ export class McpProxyService {
         tools: [],
       };
 
-    try {
-      await this.ensureConnected(state);
-    } catch {
-      // The per-server failure is reported inline instead of failing the call.
+    if (state.status === "idle") {
+      try {
+        await this.ensureConnected(state);
+      } catch {
+        // The per-server failure is reported inline instead of failing the call.
+      }
     }
     const tools = state.tools ?? [];
     return {
@@ -234,35 +248,48 @@ export class McpProxyService {
     };
   }
 
-  private async ensureConnected(state: ServerState): Promise<void> {
+  private async ensureConnected(
+    state: ServerState,
+    bypassRetryDelay = false,
+  ): Promise<void> {
     if (!state.enabled)
       throw new ChatRoomError(
         "FORBIDDEN",
         `MCP server "${state.name}" is disabled`,
       );
     if (state.client) return;
+    if (!bypassRetryDelay && state.retryTimer)
+      throw this.unavailable(state, null);
     if (state.connecting) return await state.connecting;
     const pending = this.connect(state).finally(() => {
       state.connecting = null;
+      if (!state.client && state.status === "error") this.scheduleRetry(state);
     });
     state.connecting = pending;
     return await pending;
   }
 
   private async connect(state: ServerState): Promise<void> {
+    // Diagnostics belong to the current connection attempt; do not append the
+    // same startup stderr forever across retries.
+    state.stderrTail = "";
     const transport = this.createTransport(state);
     const client = new Client(
       { name: CHATROOM_NAME, version: CHATROOM_VERSION },
       { capabilities: {} },
     );
-    client.onerror = (error) => this.invalidate(state, describeError(error));
-    client.onclose = () => this.invalidate(state, "Connection closed");
     try {
       await client.connect(transport, { timeout: this.config.callTimeoutMs });
+      const tools = await this.listTools(client);
       state.client = client;
-      state.tools = await this.listTools(client);
+      state.tools = tools;
       state.status = "connected";
-      state.error = null;
+      state.stderrTail = "";
+      this.resetRetryState(state);
+      client.onerror = (error) =>
+        this.invalidate(state, describeError(error), client);
+      client.onclose = () =>
+        this.invalidate(state, "Connection closed", client);
       this.events.emit({ type: "mcp-servers" });
     } catch (error) {
       await client.close().catch(() => undefined);
@@ -319,15 +346,72 @@ export class McpProxyService {
     });
   }
 
-  private invalidate(state: ServerState, reason: string | null): void {
-    if (state.closing) return;
-    // Records the failure reason even when no client was ever established, so
-    // a server that cannot be reached reports why instead of an empty error.
+  private invalidate(
+    state: ServerState,
+    reason: string | null,
+    sourceClient?: Client,
+  ): void {
+    if (state.closing || !state.enabled) return;
+    if (sourceClient && state.client !== sourceClient) return;
+
+    const failedClient = sourceClient ?? state.client;
     state.client = null;
+    void failedClient?.close().catch(() => undefined);
     state.tools = null;
     state.status = "error";
-    state.error = reason ?? "Connection closed";
+    state.consecutiveFailures += 1;
+    this.recordError(state, reason ?? "Connection closed");
     this.events.emit({ type: "mcp-servers" });
+    this.scheduleRetry(state);
+  }
+
+  private recordError(state: ServerState, message: string): void {
+    if (state.lastErrorMessage === message) state.errorRepeatCount += 1;
+    else {
+      state.lastErrorMessage = message;
+      state.errorRepeatCount = 1;
+    }
+    state.error =
+      state.errorRepeatCount > 1
+        ? `${message} x ${state.errorRepeatCount}`
+        : message;
+  }
+
+  private scheduleRetry(state: ServerState): void {
+    if (
+      !state.enabled ||
+      state.closing ||
+      state.client ||
+      state.connecting ||
+      state.retryTimer
+    )
+      return;
+
+    const delay =
+      state.consecutiveFailures <= QUICK_RETRY_ATTEMPTS
+        ? QUICK_RETRY_DELAY_MS
+        : STEADY_RETRY_DELAY_MS;
+    const timer = setTimeout(() => {
+      state.retryTimer = null;
+      if (!state.enabled || state.closing || state.client) return;
+      void this.retryConnection(state);
+    }, delay);
+    timer.unref?.();
+    state.retryTimer = timer;
+  }
+
+  private async retryConnection(state: ServerState): Promise<void> {
+    await this.destroyDispatcher(state);
+    await this.ensureConnected(state, true).catch(() => undefined);
+  }
+
+  private resetRetryState(state: ServerState): void {
+    if (state.retryTimer) clearTimeout(state.retryTimer);
+    state.retryTimer = null;
+    state.consecutiveFailures = 0;
+    state.lastErrorMessage = null;
+    state.errorRepeatCount = 0;
+    state.error = null;
   }
 
   private unavailable(state: ServerState, cause: unknown): ChatRoomError {
@@ -347,8 +431,8 @@ export class McpProxyService {
     state.client = null;
     state.tools = null;
     state.status = "idle";
-    state.error = null;
     state.stderrTail = "";
+    this.resetRetryState(state);
     await client?.close().catch(() => undefined);
     await this.destroyDispatcher(state);
     state.closing = false;
