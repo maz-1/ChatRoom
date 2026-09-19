@@ -22,7 +22,6 @@ public static class OwnerTokenStore
     private const uint CredPersistEnterprise = 3;
     private const int ErrorNotFound = 1168;
 
-#if !NETFRAMEWORK
     // macOS Security.framework status.
     private const int ErrSecItemNotFound = -25300;
 
@@ -37,7 +36,6 @@ public static class OwnerTokenStore
     private const string LinuxSchemaName = "org.freedesktop.Secret.Generic";
     private const int SecretSchemaNone = 0;
     private const int SecretSchemaAttributeString = 0;
-#endif
 
     public static string StoreDisplayName
     {
@@ -54,10 +52,8 @@ public static class OwnerTokenStore
     {
         if (IsWindows()) return ReadWindows(configPath);
 
-#if !NETFRAMEWORK
         if (IsMacOS()) return ReadMac(configPath);
         if (IsLinux()) return ReadLinux(configPath);
-#endif
 
         throw new PlatformNotSupportedException("ownerToken 凭据存储仅支持 Windows、macOS 和 Linux。");
     }
@@ -73,7 +69,6 @@ public static class OwnerTokenStore
             return;
         }
 
-#if !NETFRAMEWORK
         if (IsMacOS())
         {
             WriteMac(configPath, token);
@@ -85,7 +80,6 @@ public static class OwnerTokenStore
             WriteLinux(configPath, token);
             return;
         }
-#endif
 
         throw new PlatformNotSupportedException("ownerToken 凭据存储仅支持 Windows、macOS 和 Linux。");
     }
@@ -94,10 +88,8 @@ public static class OwnerTokenStore
     {
         if (IsWindows()) return DeleteWindows(configPath);
 
-#if !NETFRAMEWORK
         if (IsMacOS()) return DeleteMac(configPath);
         if (IsLinux()) return DeleteLinux(configPath);
-#endif
 
         throw new PlatformNotSupportedException("ownerToken 凭据存储仅支持 Windows、macOS 和 Linux。");
     }
@@ -194,7 +186,6 @@ public static class OwnerTokenStore
         throw StoreError("无法删除 Windows 凭据管理器中的 ownerToken。", new Win32Exception(error));
     }
 
-#if !NETFRAMEWORK
     // ------------------------------------------------------------------ macOS
 
     private static string? ReadMac(string configPath)
@@ -465,7 +456,6 @@ public static class OwnerTokenStore
         StoreError(
             "无法加载 Linux libsecret。请安装 libsecret-1，并确保桌面 Secret Service（例如 GNOME Keyring 或 KWallet）可用。",
             inner);
-#endif
 
     private static OwnerTokenStoreException StoreError(string message, Exception? inner = null) =>
         new OwnerTokenStoreException(message, inner);
@@ -519,7 +509,6 @@ public static class OwnerTokenStore
     [DllImport("advapi32.dll")]
     private static extern void CredFree(IntPtr buffer);
 
-#if !NETFRAMEWORK
     // --------------------------------------------------------------- macOS P/Invoke
 
     [DllImport(SecurityFramework, EntryPoint = "SecKeychainFindGenericPassword")]
@@ -635,7 +624,6 @@ public static class OwnerTokenStore
 
     [DllImport(LinuxGlibLibrary, CallingConvention = CallingConvention.Cdecl)]
     private static extern void g_error_free(IntPtr error);
-#endif
 }
 
 

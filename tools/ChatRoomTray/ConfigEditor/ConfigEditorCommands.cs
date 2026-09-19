@@ -31,7 +31,7 @@ internal static class ConfigEditorCommands
             case "--uismoke":
                 return RunUiSmoke(ReadOption(args, "--report"));
             case "--traysmoke":
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
                 AttachConsole();
                 Console.WriteLine("--traysmoke 仅用于 Linux/macOS 跨平台托盘后端。");
                 return 64;
@@ -528,7 +528,7 @@ internal static class ConfigEditorCommands
                 "TraySettings 保留其他 INI section",
                 trayText.Contains("[Other]") && trayText.Contains("Keep=yes"));
 
-#if !NETFRAMEWORK
+#if !WINDOWS_TRAY
             var deployRoot = Path.Combine(directory, "deploy");
             var nestedApp = Path.Combine(deployRoot, "bin", "tray");
             Directory.CreateDirectory(nestedApp);
@@ -756,7 +756,7 @@ internal static class ConfigEditorCommands
     /// </summary>
     private static void AttachConsole()
     {
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
         try
         {
             NativeAttachConsole(-1);
@@ -768,7 +768,7 @@ internal static class ConfigEditorCommands
 #endif
     }
 
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool NativeAttachConsole(int processId);
 #endif

@@ -24,9 +24,8 @@ internal static class ConfigEditorHost
 
     private static Application CreateApplication()
     {
-#if NETFRAMEWORK
-        // ILRepack merges Eto.WinForms into the single Windows EXE, so construct
-        // the backend directly instead of relying on assembly-name discovery.
+#if WINDOWS_TRAY
+        // Windows uses Eto's WinForms backend inside the existing tray process.
         return new Application(new Eto.WinForms.Platform());
 #else
         if (OperatingSystem.IsLinux())

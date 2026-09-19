@@ -1,4 +1,4 @@
-#if !NETFRAMEWORK
+#if !WINDOWS_TRAY
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

@@ -12,7 +12,7 @@ internal static class PlatformShell
 
     private static void OpenTarget(string target)
     {
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
         Process.Start(new ProcessStartInfo
         {
             FileName = target,

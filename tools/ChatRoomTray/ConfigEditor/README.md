@@ -6,9 +6,9 @@
 
 | 平台 | 目标框架 | Eto 后端 | 托盘 |
 | --- | --- | --- | --- |
-| Windows | .NET Framework 4.8 | Eto WinForms | 保留现有 WinForms Tray |
-| Linux | .NET 10 | Eto GTK | AppIndicator/StatusNotifierItem；无 watcher 时 fallback 窗口 |
-| macOS | .NET 10 | Eto Mac64 | Eto 原生 TrayIndicator |
+| Windows | .NET 8 (`net8.0-windows`) | Eto WinForms | 保留现有 WinForms Tray |
+| Linux | .NET 8 (`net8.0`) | Eto GTK | AppIndicator/StatusNotifierItem；无 watcher 时 fallback 窗口 |
+| macOS | .NET 8 (`net8.0`) | Eto Mac64 | Eto 原生 TrayIndicator |
 
 跨平台目标只排除 Windows 专用的 `StartupArgsDialog.cs` 与 `TrayApplicationContext.cs`；`TraySettings.cs` 已改为纯托管 INI，三平台共用。`ConfigEditor` 源码、配置模型、校验、MCP 服务编辑和 ownerToken 管理也均为同一份代码。
 
@@ -29,20 +29,20 @@ Windows 默认仍构建完整托盘版本：
 ```powershell
 cd tools/ChatRoomTray
 dotnet build
-bin\Debug\net48\ChatRoomTray.exe --config
+bin\Debug\net8.0-windows\ChatRoomTray.exe --config
 ```
 
-Linux 上同一个项目默认选择 `net10.0 + Eto GTK`：
+Linux 上同一个项目默认选择 `net8.0 + Eto GTK`：
 
 ```bash
 cd tools/ChatRoomTray
 dotnet build
-./bin/Debug/net10.0/ChatRoomTray --config
+./bin/Debug/net8.0/ChatRoomTray --config
 ```
 
-macOS 使用 `net10.0 + Eto Mac64`，配置了 `osx-x64` 与 `osx-arm64` 两个 RID；`dotnet build` 会生成对应 `.app`。
+macOS 使用 `net8.0 + Eto Mac64`，配置了 `osx-x64` 与 `osx-arm64` 两个 RID；`dotnet build` 会生成对应 `.app`。
 
-Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappindicator3`。KDE Plasma 原生提供 StatusNotifierWatcher；GNOME Shell 需启用 AppIndicator/KStatusNotifierItem 扩展。若 watcher/库不可用，会显示 fallback 控制窗口。认证功能另需 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 构建继续使用 ILRepack 保持单 EXE。
+Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappindicator3`。KDE Plasma 原生提供 StatusNotifierWatcher；GNOME Shell 需启用 AppIndicator/KStatusNotifierItem 扩展。若 watcher/库不可用，会显示 fallback 控制窗口。认证功能另需 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 如需物理上只有一个 EXE 的发布包，使用 .NET 8 `PublishSingleFile` + `IncludeNativeLibrariesForSelfExtract`。
 
 ## 依赖
 
@@ -51,7 +51,6 @@ Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappind
 - **Eto.Platform.Gtk 2.11.0**：Linux backend。
 - **Eto.Platform.Mac64 2.11.0**：macOS backend。
 - **Newtonsoft.Json 13.0.3**：配置序列化与多态 MCP transport。
-- **ILRepack.Lib.MSBuild.Task**：仅 Windows net48 构建使用。
 
 ## 能编辑的内容
 
@@ -97,17 +96,17 @@ Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappind
 
 ## CLI / 无头验证
 
-Windows 的 net48 仍是 WinExe，建议从控制台用 `Start-Process -Wait`：
+Windows 的 `net8.0-windows` 仍是 WinExe，建议从控制台用 `Start-Process -Wait`：
 
 ```powershell
-$exe = "bin/Debug/net48/ChatRoomTray.exe"
+$exe = "bin/Debug/net8.0-windows/ChatRoomTray.exe"
 
 Start-Process $exe -ArgumentList '--check','--report','check.txt' -Wait -NoNewWindow
 Start-Process $exe -ArgumentList '--selftest','--report','selftest.txt' -Wait -NoNewWindow
 Start-Process $exe -ArgumentList '--uismoke','--report','uismoke.txt' -Wait -NoNewWindow
 ```
 
-Linux 的 net10 构建可直接执行 apphost：
+Linux 的 net8 构建可直接执行 apphost：
 
 ```bash
 ./ChatRoomTray --check
@@ -126,14 +125,14 @@ macOS bundle 的 CLI 入口位于 `.app/Contents/MacOS/ChatRoomTray`，例如：
 
 ## 已验证的跨平台路径
 
-- Windows net48：0 warning / 0 error，ILRepack 单 EXE 成功，`--selftest` 与 `--uismoke` 均通过。
-- .NET 10 + GTK：交叉编译 0 warning / 0 error。
-- Linux x64 self-contained：在 WSL2 Ubuntu 上真实运行 `--selftest` 通过，POSIX 命令解析和 XDG 路径生效。
+- Windows `net8.0-windows`：0 warning / 0 error，`--selftest` 与 `--uismoke` 均通过；self-contained single-file 发布目录可缩为唯一 `ChatRoomTray.exe`，其 selftest/uismoke 也均通过。
+- .NET 8 + GTK：交叉编译 0 warning / 0 error。
+- Linux .NET 8 x64 self-contained：在 WSL2 Ubuntu 上真实运行 `--selftest` 通过，POSIX 命令解析和 XDG 路径生效。
 - Linux WSLg + GTK3：真实运行 Eto `--uismoke` 通过。
 - Linux WSLg 托盘：缺少 AppIndicator 库时 fallback window 路径可启动；`--traysmoke` exit 0 且不启动 ChatRoom。
 - Linux 托盘 SIGTERM：实测托盘和其 Node 子进程树都会结束，不遗留后台 Node。
 - Linux 缺少 `libsecret-1` 时：纯本地配置 `--check` 为 0 error + 1 warning，不会被错误阻止。
-- macOS Mac64：已交叉构建 `osx-x64` / `osx-arm64` 两个 `.app`，0 error；最终原生运行仍需在 macOS 机器上验证。
+- macOS `.NET 8 + Mac64`：已交叉构建 `osx-x64` / `osx-arm64` 两个 `.app`，0 warning / 0 error；最终原生运行仍需在 macOS 机器上验证。
 
 ## 需要知道的几点
 

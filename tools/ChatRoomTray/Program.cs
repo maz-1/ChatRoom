@@ -2,8 +2,7 @@ using System;
 using System.Linq;
 using ChatRoomTray.ConfigEditor;
 
-#if NETFRAMEWORK
-using System.Runtime.InteropServices;
+#if WINDOWS_TRAY
 using System.Threading;
 using System.Windows.Forms;
 #endif
@@ -15,7 +14,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
         return RunWindowsTrayBuild(args);
 #else
         if (args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
@@ -29,10 +28,9 @@ internal static class Program
 #endif
     }
 
-#if NETFRAMEWORK
+#if WINDOWS_TRAY
     private static int RunWindowsTrayBuild(string[] args)
     {
-        EnableDpiAwareness();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -96,51 +94,5 @@ internal static class Program
         || string.Equals(arg, "--uismoke", StringComparison.OrdinalIgnoreCase)
         || string.Equals(arg, "--traysmoke", StringComparison.OrdinalIgnoreCase);
 
-    private static void EnableDpiAwareness()
-    {
-        try
-        {
-            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return;
-        }
-        catch (DllNotFoundException)
-        {
-        }
-        catch (EntryPointNotFoundException)
-        {
-        }
-
-        try
-        {
-            if (SetProcessDpiAwareness(2) == 0) return;
-        }
-        catch (DllNotFoundException)
-        {
-        }
-        catch (EntryPointNotFoundException)
-        {
-        }
-
-        try
-        {
-            SetProcessDPIAware();
-        }
-        catch (DllNotFoundException)
-        {
-        }
-        catch (EntryPointNotFoundException)
-        {
-        }
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
-
-    [DllImport("shcore.dll")]
-    private static extern int SetProcessDpiAwareness(int awareness);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetProcessDPIAware();
 #endif
 }

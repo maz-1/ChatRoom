@@ -6,9 +6,9 @@ ChatRoomTray is the integrated desktop host for ChatRoom. The configuration edit
 
 | Platform | Runtime | Tray backend |
 | --- | --- | --- |
-| Windows | .NET Framework 4.8 | Existing WinForms `NotifyIcon` |
-| Linux | .NET 10 + Eto GTK | Ayatana/AppIndicator → StatusNotifierItem + DBusMenu |
-| macOS | .NET 10 + Eto Mac64 | Eto native `TrayIndicator` |
+| Windows | .NET 8 (`net8.0-windows`) | Existing WinForms `NotifyIcon` |
+| Linux | .NET 8 + Eto GTK | Ayatana/AppIndicator → StatusNotifierItem + DBusMenu |
+| macOS | .NET 8 + Eto Mac64 | Eto native `TrayIndicator` |
 
 Linux deliberately does **not** rely on legacy `Gtk.StatusIcon` as the primary tray implementation.
 
@@ -54,18 +54,22 @@ cd tools/ChatRoomTray
 dotnet build -c Release
 ```
 
-Output: `bin/Release/net48/ChatRoomTray.exe`.
+Output: `bin/Release/net8.0-windows/ChatRoomTray.exe` plus its managed/runtime dependencies.
 
-Windows still uses ILRepack to merge managed runtime dependencies into the single EXE.
+For a self-contained single-file Windows package, use the .NET 8 publisher:
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+```
 
 ### Linux
 
-On Linux the project selects `net10.0 + Eto GTK` automatically:
+On Linux the project selects `net8.0 + Eto GTK` automatically:
 
 ```bash
 cd tools/ChatRoomTray
 dotnet build -c Release
-./bin/Release/net10.0/ChatRoomTray
+./bin/Release/net8.0/ChatRoomTray
 ```
 
 Runtime GUI dependencies:

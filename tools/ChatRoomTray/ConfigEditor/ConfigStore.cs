@@ -179,9 +179,7 @@ public static class ConfigStore
         {
             // No BOM: Node's JSON.parse rejects a leading U+FEFF.
             File.WriteAllText(temporary, Serialize(config), Utf8NoBom);
-            // File.Move(overwrite:) does not exist on .NET Framework 4.8.
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(temporary, path);
+            File.Move(temporary, path, overwrite: true);
         }
         finally
         {
