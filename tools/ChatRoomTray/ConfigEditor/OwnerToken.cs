@@ -1,7 +1,7 @@
 using System;
 using System.Security.Cryptography;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>
 /// Owns the owner token: it is generated exactly like `chatroom init` does

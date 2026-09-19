@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>
 /// Mirrors <c>ChatRoomConfig</c> from src/config/types.ts. The <c>Order</c> values

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>Adds or edits a single entry under <c>mcp.servers</c>.</summary>
 public sealed class McpServerDialog : Form

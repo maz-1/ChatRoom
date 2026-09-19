@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>UI construction for <see cref="MainForm"/> (kept apart from the logic).</summary>
 public partial class MainForm : Form

@@ -6,7 +6,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using ChatRoomConfigEditor;
+using ChatRoomTray.ConfigEditor;
 
 namespace ChatRoomTray;
 
@@ -456,8 +456,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private static Icon LoadApplicationIcon()
     {
-        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chatgpt.ico");
-        if (File.Exists(iconPath)) return new Icon(iconPath);
+        using (var stream = typeof(TrayApplicationContext).Assembly
+                   .GetManifestResourceStream("ChatRoomTray.chatgpt.ico"))
+        {
+            if (stream is not null)
+            {
+                using var embedded = new Icon(stream);
+                return (Icon)embedded.Clone();
+            }
+        }
 
         var extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         return extracted is null ? (Icon)SystemIcons.Application.Clone() : (Icon)extracted.Clone();

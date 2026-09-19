@@ -1,7 +1,7 @@
-# ChatRoom 配置编辑器
+# ChatRoomTray 配置编辑器模块
 
-编辑 ChatRoom 配置文件（`config.json`）的 Windows 桌面应用（C# / WinForms / **.NET Framework 4.8**）。
-ChatRoom 的 WebUI 对 MCP 服务只做只读展示，增删改由本应用承担。
+该目录包含 `ChatRoomTray` 内置的 ChatRoom `config.json` 配置编辑器（C# / WinForms / **.NET Framework 4.8**）。
+它不是独立工程，也不生成单独的 EXE；ChatRoom 的 WebUI 对 MCP 服务只做只读展示，增删改由此模块承担。
 
 ## 运行要求
 
@@ -11,16 +11,13 @@ ChatRoom 的 WebUI 对 MCP 服务只做只读展示，增删改由本应用承�
 ## 构建与运行
 
 ```powershell
-cd tools/ChatRoomConfigEditor
+cd tools/ChatRoomTray
 dotnet build
-dotnet run
+bin\Debug\net48\ChatRoomTray.exe --config
 ```
 
-产物：`bin/Debug/net48/ChatRoomConfigEditor.exe`。构建过程通过 ILRepack 将
-`Newtonsoft.Json.dll` 合并进 EXE，因此发布时无需携带独立的依赖 DLL；
-`ChatRoomConfigEditor.exe.config` 仍用于 .NET Framework 和高 DPI 设置。
-
-工程为 SDK 风格 csproj 且目标为 `net48`，可直接用 VS 2022 打开；也可在 VS 里改回传统 csproj 格式，源码无需改动。
+产物：`bin/Debug/net48/ChatRoomTray.exe`。配置编辑器源码由 `ChatRoomTray.csproj` 直接编译；构建过程通过 ILRepack 将
+`Newtonsoft.Json.dll` 合并进 EXE，因此发布时无需携带独立的依赖 DLL。
 
 ## 依赖
 
@@ -74,7 +71,7 @@ dotnet run
 GUI 子系统程序从控制台运行时不会阻塞，建议用 `Start-Process -Wait`：
 
 ```powershell
-$exe = "bin/Debug/net48/ChatRoomConfigEditor.exe"
+$exe = "bin/Debug/net48/ChatRoomTray.exe"
 
 # 校验（默认路径来自 CHATROOM_CONFIG 或 %APPDATA%\ChatRoom\config.json）
 Start-Process $exe -ArgumentList '--check','--report','check.txt' -Wait -NoNewWindow

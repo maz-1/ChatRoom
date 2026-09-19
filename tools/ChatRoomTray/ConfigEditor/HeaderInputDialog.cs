@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>Two-field prompt for creating or editing one HTTP request header.</summary>
 public sealed class HeaderInputDialog : Form

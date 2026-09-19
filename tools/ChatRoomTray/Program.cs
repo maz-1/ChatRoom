@@ -3,7 +3,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
-using ChatRoomConfigEditor;
+using ChatRoomTray.ConfigEditor;
 
 namespace ChatRoomTray;
 
@@ -15,6 +15,11 @@ internal static class Program
         EnableDpiAwareness();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+
+        if (args.Length > 0
+            && (!args[0].StartsWith("-", StringComparison.Ordinal)
+                || IsConfigEditorCommand(args[0])))
+            return ConfigEditorCommands.Run(args);
 
         if (args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
         {
@@ -28,7 +33,11 @@ internal static class Program
             MessageBox.Show(
                 "ChatRoomTray\n\n"
                 + "直接启动：常驻托盘并自动启动 ChatRoom。\n"
-                + "--config：仅打开集成的配置编辑器。",
+                + "--config：仅打开集成的配置编辑器。\n"
+                + "--check [path]：校验 ChatRoom 配置。\n"
+                + "--roundtrip <src> <dst>：配置往返验证。\n"
+                + "--selftest：运行配置逻辑自检。\n"
+                + "--uismoke：运行配置界面自检。",
                 "ChatRoom Tray",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -61,6 +70,12 @@ internal static class Program
             return 1;
         }
     }
+
+    private static bool IsConfigEditorCommand(string arg) =>
+        string.Equals(arg, "--check", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(arg, "--roundtrip", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(arg, "--selftest", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(arg, "--uismoke", StringComparison.OrdinalIgnoreCase);
 
     private static void EnableDpiAwareness()
     {

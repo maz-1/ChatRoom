@@ -7,14 +7,13 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
-internal static class Program
+internal static class ConfigEditorCommands
 {
-    [STAThread]
-    private static int Main(string[] args)
+    public static int Run(string[] args)
     {
-        if (args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal))
+        if (args.Length > 0 && !args[0].StartsWith("-", StringComparison.Ordinal))
             return RunCheck(Path.GetFullPath(args[0]), report: null);
 
         switch (args.FirstOrDefault())
@@ -49,17 +48,17 @@ internal static class Program
             case "-h":
                 AttachConsole();
                 Console.WriteLine(
-                    "ChatRoomConfigEditor — 编辑 ChatRoom 配置文件（图形界面）\n\n" +
-                    "  ChatRoomConfigEditor.exe                 打开图形界面\n" +
-                    "  ChatRoomConfigEditor.exe <config.json>   校验指定配置并输出报告\n" +
-                    "  ChatRoomConfigEditor.exe --check [path] [--report <file>]\n" +
+                    "ChatRoomTray 配置编辑器\n\n" +
+                    "  ChatRoomTray.exe --config        打开图形界面\n" +
+                    "  ChatRoomTray.exe <config.json>   校验指定配置并输出报告\n" +
+                    "  ChatRoomTray.exe --check [path] [--report <file>]\n" +
                     "                                           校验配置（默认路径来自 CHATROOM_CONFIG\n" +
                     "                                           或 %APPDATA%\\ChatRoom\\config.json）\n" +
-                    "  ChatRoomConfigEditor.exe --roundtrip <src> <dst> [--report <file>]\n" +
+                    "  ChatRoomTray.exe --roundtrip <src> <dst> [--report <file>]\n" +
                     "                                           载入配置另存并比对是否一致\n" +
-                    "  ChatRoomConfigEditor.exe --selftest [--report <file>]\n" +
+                    "  ChatRoomTray.exe --selftest [--report <file>]\n" +
                     "                                           自检（编码、校验规则、写入不变量）\n" +
-                    "  ChatRoomConfigEditor.exe --uismoke [--report <file>]\n" +
+                    "  ChatRoomTray.exe --uismoke [--report <file>]\n" +
                     "                                           界面自检（构造窗体并断言布局对齐）");
                 return 0;
             default:

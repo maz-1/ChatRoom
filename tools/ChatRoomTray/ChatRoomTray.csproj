@@ -12,7 +12,7 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <ApplicationIcon>..\chatgpt.ico</ApplicationIcon>
+    <ApplicationIcon>chatgpt.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
@@ -25,23 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\ChatRoomConfigEditor\ConfigPaths.cs" Link="ConfigEditor\ConfigPaths.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\ConfigStore.cs" Link="ConfigEditor\ConfigStore.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\ConfigValidator.cs" Link="ConfigEditor\ConfigValidator.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\MainForm.cs" Link="ConfigEditor\MainForm.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\MainForm.Layout.cs" Link="ConfigEditor\MainForm.Layout.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\McpServerConverter.cs" Link="ConfigEditor\McpServerConverter.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\McpServerDialog.cs" Link="ConfigEditor\McpServerDialog.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\Models.cs" Link="ConfigEditor\Models.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\OwnerToken.cs" Link="ConfigEditor\OwnerToken.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\OwnerTokenStore.cs" Link="ConfigEditor\OwnerTokenStore.cs" />
-    <Compile Include="..\ChatRoomConfigEditor\TextInputDialog.cs" Link="ConfigEditor\TextInputDialog.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="..\chatgpt.ico" Link="chatgpt.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <EmbeddedResource Include="chatgpt.ico" LogicalName="ChatRoomTray.chatgpt.ico" />
   </ItemGroup>
 
   <ItemGroup>

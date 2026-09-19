@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace ChatRoomConfigEditor;
+namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>
 /// Mirrors src/config/platform-paths.ts so the editor defaults to the same file
