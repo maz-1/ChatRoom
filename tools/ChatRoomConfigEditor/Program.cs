@@ -562,6 +562,43 @@ internal static class Program
             var text = File.ReadAllText(target);
             Check("包含 mcp.servers", text.Contains("\"servers\": {}"));
 
+            // Timestamped config backups are rotated, while unrelated .bak files are untouched.
+            for (var index = 0; index < 12; index++)
+            {
+                var stamp = new DateTime(2020, 1, 1, 0, 0, index).ToString("yyyyMMdd-HHmmss");
+                File.WriteAllText(target + "." + stamp + ".bak", "backup-" + index);
+            }
+            var unrelatedBackup = target + ".manual.bak";
+            File.WriteAllText(unrelatedBackup, "keep me");
+            var newestBackup = ConfigStore.Save(target, defaults);
+            var timestampedBackups = Directory.GetFiles(directory, "config.json.*.bak")
+                .Where(candidate =>
+                {
+                    var name = Path.GetFileName(candidate);
+                    var prefix = "config.json.";
+                    const string suffix = ".bak";
+                    if (!name.StartsWith(prefix, StringComparison.Ordinal)
+                        || !name.EndsWith(suffix, StringComparison.Ordinal))
+                        return false;
+                    var stamp = name.Substring(prefix.Length, name.Length - prefix.Length - suffix.Length);
+                    return DateTime.TryParseExact(
+                        stamp,
+                        "yyyyMMdd-HHmmss",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None,
+                        out _);
+                })
+                .ToList();
+            Check(
+                "配置历史备份最多保留 10 个",
+                timestampedBackups.Count == 10,
+                $"实际 {timestampedBackups.Count} 个");
+            Check(
+                "最新自动备份被保留",
+                newestBackup is not null && File.Exists(newestBackup),
+                newestBackup ?? "未生成备份");
+            Check("非自动备份文件不会被清理", File.Exists(unrelatedBackup));
+
             // A minimal config exercising both transports survives a round trip.
             var edge = ConfigStore.CreateDefault();
             edge.Mcp.Servers["local"] = new StdioMcpServerConfig

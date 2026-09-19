@@ -169,6 +169,7 @@ public static class ConfigStore
             backup = string.Format(
                 "{0}.{1:yyyyMMdd-HHmmss}.bak", path, DateTime.Now);
             File.Copy(path, backup, true);
+            PruneBackups(path);
         }
 
         var temporary = Path.Combine(
@@ -188,6 +189,42 @@ public static class ConfigStore
         }
 
         return backup;
+    }
+
+    private static void PruneBackups(string path)
+    {
+        const int maxBackupCount = 10;
+
+        var directory = Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException("无法解析目录：" + path);
+        var fileName = Path.GetFileName(path);
+        var prefix = fileName + ".";
+        const string suffix = ".bak";
+
+        var backups = Directory.GetFiles(directory, fileName + ".*.bak")
+            .Where(candidate =>
+            {
+                var name = Path.GetFileName(candidate);
+                if (!name.StartsWith(prefix, StringComparison.Ordinal)
+                    || !name.EndsWith(suffix, StringComparison.Ordinal))
+                    return false;
+
+                var timestamp = name.Substring(
+                    prefix.Length,
+                    name.Length - prefix.Length - suffix.Length);
+                return DateTime.TryParseExact(
+                    timestamp,
+                    "yyyyMMdd-HHmmss",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out _);
+            })
+            .OrderByDescending(candidate => Path.GetFileName(candidate), StringComparer.Ordinal)
+            .Skip(maxBackupCount)
+            .ToList();
+
+        foreach (var oldBackup in backups)
+            File.Delete(oldBackup);
     }
 
     public static void RemoveLegacyOwnerToken(string path, DateTime? expectedLastWriteUtc)
