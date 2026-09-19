@@ -299,9 +299,6 @@ function messageOf(cause: unknown): string {
                   )
                 }}
               </v-chip>
-              <div v-if="client.disabledAt" class="text-caption muted mt-1">
-                {{ formatTime(client.disabledAt) }}
-              </div>
             </td>
             <td class="text-center">
               <v-switch
