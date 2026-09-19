@@ -1,8 +1,53 @@
-# ChatRoomTray (.NET Framework 4.8)
+# ChatRoomTray
 
-`ChatRoomTray` replaces `tools/ChatRoomTray.ahk` with a native WinForms tray application. The ChatRoom configuration editor is now part of this project and is compiled directly into the same executable.
+ChatRoomTray is the integrated desktop host for ChatRoom. The configuration editor stays in the same project; there is no separate editor project or executable.
+
+## Platform backends
+
+| Platform | Runtime | Tray backend |
+| --- | --- | --- |
+| Windows | .NET Framework 4.8 | Existing WinForms `NotifyIcon` |
+| Linux | .NET 10 + Eto GTK | Ayatana/AppIndicator → StatusNotifierItem + DBusMenu |
+| macOS | .NET 10 + Eto Mac64 | Eto native `TrayIndicator` |
+
+Linux deliberately does **not** rely on legacy `Gtk.StatusIcon` as the primary tray implementation.
+
+### Linux: KDE and GNOME
+
+The Linux backend dynamically loads one of:
+
+- `libayatana-appindicator3.so.1`
+- `libayatana-appindicator3.so`
+- `libappindicator3.so.1`
+- `libappindicator3.so`
+
+AppIndicator publishes the tray item as a StatusNotifierItem. KDE Plasma provides `org.kde.StatusNotifierWatcher` natively. GNOME Shell normally requires the **AppIndicator and KStatusNotifierItem Support** extension.
+
+At startup ChatRoomTray probes the session D-Bus owner of `org.kde.StatusNotifierWatcher`:
+
+- watcher present → normal tray menu;
+- AppIndicator available but watcher absent → keep the StatusNotifierItem and also show a visible fallback control window;
+- AppIndicator library absent → do not depend on invisible legacy tray behavior; show the fallback control window.
+
+The fallback window exposes the important tray actions, so a GNOME/Wayland user is never left with a running background process and no UI entry point.
+
+## Tray menu
+
+The cross-platform menu provides:
+
+- current ChatRoom state;
+- Open WebUI;
+- Start / Stop / Restart ChatRoom;
+- Edit persisted startup arguments;
+- Open the integrated configuration editor;
+- Open the ChatRoom data directory;
+- Exit and terminate the ChatRoom process tree.
+
+Windows keeps its existing console-show/hide behavior. Linux/macOS do not create a dedicated ChatRoom console window.
 
 ## Build
+
+### Windows
 
 ```powershell
 cd tools/ChatRoomTray
@@ -11,34 +56,59 @@ dotnet build -c Release
 
 Output: `bin/Release/net48/ChatRoomTray.exe`.
 
-The project owns `chatgpt.ico` directly under `tools/ChatRoomTray`. The same file is used as the executable icon and embedded into the assembly for the tray/config-editor icon, so no sidecar icon file is required at runtime. ILRepack merges managed dependencies into the EXE.
+Windows still uses ILRepack to merge managed runtime dependencies into the single EXE.
 
-## Runtime layout
+### Linux
 
-Deploy the tray with the packaged ChatRoom runtime:
+On Linux the project selects `net10.0 + Eto GTK` automatically:
 
-- `ChatRoomTray.exe`
-- `node.exe`
-- `app/dist/cli/index.js`
-- `app/node_modules/`
-- `app/package.json`
+```bash
+cd tools/ChatRoomTray
+dotnet build -c Release
+./bin/Release/net10.0/ChatRoomTray
+```
 
-`ChatRoomTray.exe` launches `node.exe app/dist/cli/index.js ...` directly; no `.cmd` or `.bat` launcher is required. The tray application keeps compatibility with the old `chatroom-tray.ini`; `[ChatRoom] Args` defaults to `serve`.
+Runtime GUI dependencies:
 
-## Tray functions
+- GTK3;
+- Ayatana AppIndicator/AppIndicator for the real tray;
+- on GNOME, an AppIndicator/KStatusNotifierItem Shell extension;
+- `libsecret-1` plus a Secret Service only when ownerToken-backed authentication is used.
 
-- Open WebUI
-- Show/hide the ChatRoom console window
-- Start / stop / restart ChatRoom
-- Edit persisted startup arguments
-- Open the integrated configuration editor
-- Monitor unexpected process exits and show tray notifications
-- Stop the ChatRoom process tree when the tray application exits
+### macOS
 
-Double-clicking the tray icon toggles the console window. The application is single-instance.
+macOS uses Eto Mac64 with `osx-x64` and `osx-arm64` bundle targets. Launching the app without arguments starts the tray host.
 
-## Configuration editor integration
+## Commands
 
-The configuration editor source lives under `ConfigEditor/` inside the `ChatRoomTray` project and is compiled by the normal SDK-style project file. There is no separate editor executable or project. Config saves keep only the 10 most recent timestamped automatic backups.
+- no arguments: start tray host and ChatRoom;
+- `--tray`: explicitly start tray host;
+- `--config`: open only the integrated configuration editor;
+- `--check [path]`: validate configuration;
+- `--roundtrip <src> <dst>`: configuration round-trip check;
+- `--selftest`: configuration and tray logic self-test;
+- `--uismoke`: Eto configuration UI smoke test;
+- `--traysmoke`: initialize the Linux/macOS tray backend or fallback window without starting ChatRoom, then exit automatically.
 
-Run `ChatRoomTray.exe --config` to open only the integrated configuration editor without starting the tray runtime.
+## Runtime discovery
+
+The cross-platform tray looks for ChatRoom's Node runtime in the application directory, macOS `Contents/Resources`, and parent deployment directories. It accepts either:
+
+- `app/dist/cli/index.js`, or
+- `dist/cli/index.js`.
+
+A bundled `node` / `node.exe` in the same runtime root is preferred; otherwise the tray uses `node` from `PATH`.
+
+The existing `chatroom-tray.ini` format is kept. `[ChatRoom] Args` defaults to `serve`, and the INI reader/writer is now fully managed so it works on all three platforms.
+
+On Linux/macOS the tray host also registers SIGTERM/SIGINT cleanup. The tracked ChatRoom process tree is terminated before the operating system performs its normal signal termination, preventing an orphaned Node process.
+
+## Icons
+
+- Windows executable / WinForms tray: `chatgpt.ico`;
+- Eto/macOS image resource: `chatgpt.png`;
+- Linux AppIndicator: a temporary SVG icon registered through the AppIndicator icon theme path.
+
+## Configuration editor
+
+The integrated editor lives under `ConfigEditor/` and is compiled by this project on every platform. Config saves retain the 10 most recent timestamped automatic backups.

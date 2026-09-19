@@ -30,6 +30,14 @@ internal static class ConfigEditorCommands
                 return RunSelfTest(ReadOption(args, "--report"));
             case "--uismoke":
                 return RunUiSmoke(ReadOption(args, "--report"));
+            case "--traysmoke":
+#if NETFRAMEWORK
+                AttachConsole();
+                Console.WriteLine("--traysmoke 仅用于 Linux/macOS 跨平台托盘后端。");
+                return 64;
+#else
+                return global::ChatRoomTray.CrossPlatformTrayApplication.RunSmoke();
+#endif
             case "--roundtrip":
             {
                 if (args.Length < 3)
@@ -51,8 +59,9 @@ internal static class ConfigEditorCommands
                     ? "ChatRoomTray.exe"
                     : "./ChatRoomTray";
                 Console.WriteLine(
-                    "ChatRoomTray 配置编辑器\n\n" +
-                    $"  {executableName} --config        打开图形界面\n" +
+                    "ChatRoomTray\n\n" +
+                    $"  {executableName} --tray          启动托盘宿主（Linux/macOS；无参数时相同）\n" +
+                    $"  {executableName} --config        仅打开配置编辑器\n" +
                     $"  {executableName} <config.json>   校验指定配置并输出报告\n" +
                     $"  {executableName} --check [path] [--report <file>]\n" +
                     $"                                           校验配置（默认：{ConfigPaths.DefaultConfigPath()}）\n" +
@@ -61,7 +70,9 @@ internal static class ConfigEditorCommands
                     $"  {executableName} --selftest [--report <file>]\n" +
                     "                                           自检（编码、校验规则、写入不变量）\n" +
                     $"  {executableName} --uismoke [--report <file>]\n" +
-                    "                                           界面自检（构造 Eto 窗体并检查关键控件）");
+                    "                                           界面自检（构造 Eto 窗体并检查关键控件）\n" +
+                    $"  {executableName} --traysmoke\n" +
+                    "                                           托盘后端 smoke（不启动 ChatRoom，约 1 秒后退出）");
                 return 0;
             default:
                 return ConfigEditorHost.Run();
@@ -501,6 +512,117 @@ internal static class ConfigEditorCommands
 
             var text = File.ReadAllText(target);
             Check("包含 mcp.servers", text.Contains("\"servers\": {}"));
+
+            var trayIni = Path.Combine(directory, "chatroom-tray.ini");
+            File.WriteAllText(
+                trayIni,
+                "[Other]\nKeep=yes\n\n[ChatRoom]\nArgs=serve --old\n",
+                new UTF8Encoding(false));
+            var traySettings = new global::ChatRoomTray.TraySettings(trayIni);
+            Check("TraySettings 读取已有启动参数", traySettings.Args == "serve --old", traySettings.Args);
+            traySettings.SaveArgs("serve --port 9000");
+            var trayReloaded = new global::ChatRoomTray.TraySettings(trayIni);
+            var trayText = File.ReadAllText(trayIni);
+            Check("TraySettings 写入后可读回", trayReloaded.Args == "serve --port 9000", trayReloaded.Args);
+            Check(
+                "TraySettings 保留其他 INI section",
+                trayText.Contains("[Other]") && trayText.Contains("Keep=yes"));
+
+#if !NETFRAMEWORK
+            var deployRoot = Path.Combine(directory, "deploy");
+            var nestedApp = Path.Combine(deployRoot, "bin", "tray");
+            Directory.CreateDirectory(nestedApp);
+            Directory.CreateDirectory(Path.Combine(deployRoot, "dist", "cli"));
+            File.WriteAllText(Path.Combine(deployRoot, "dist", "cli", "index.js"), string.Empty);
+            File.WriteAllText(Path.Combine(deployRoot, "node"), string.Empty);
+            var resolvedDeploy = global::ChatRoomTray.CrossPlatformTrayHost.ResolveRuntime(nestedApp);
+            Check(
+                "跨平台托盘可从父目录解析 node + dist/cli",
+                resolvedDeploy.NodeExecutable == Path.Combine(deployRoot, "node")
+                && resolvedDeploy.EntryPath == Path.Combine(deployRoot, "dist", "cli", "index.js")
+                && resolvedDeploy.WorkingDirectory == deployRoot);
+
+            var bundleRoot = Path.Combine(directory, "ChatRoomTray.app", "Contents");
+            var macAppDir = Path.Combine(bundleRoot, "MacOS");
+            var macResources = Path.Combine(bundleRoot, "Resources");
+            Directory.CreateDirectory(macAppDir);
+            Directory.CreateDirectory(Path.Combine(macResources, "dist", "cli"));
+            File.WriteAllText(Path.Combine(macResources, "dist", "cli", "index.js"), string.Empty);
+            File.WriteAllText(Path.Combine(macResources, "node"), string.Empty);
+            var resolvedBundle = global::ChatRoomTray.CrossPlatformTrayHost.ResolveRuntime(macAppDir);
+            Check(
+                "macOS bundle 优先解析 Contents/Resources runtime",
+                resolvedBundle.NodeExecutable == Path.Combine(macResources, "node")
+                && resolvedBundle.EntryPath == Path.Combine(macResources, "dist", "cli", "index.js")
+                && resolvedBundle.WorkingDirectory == macResources);
+
+            var processExecutable = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? Path.Combine(Environment.SystemDirectory, "PING.EXE")
+                : "/bin/sleep";
+            var processEntry = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "-n" : "30";
+            var processArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? new[] { "30", "127.0.0.1" }
+                : Array.Empty<string>();
+            using (var smokeProcess = global::ChatRoomTray.CrossPlatformTrayHost.StartRuntimeProcess(
+                       processExecutable,
+                       processEntry,
+                       directory,
+                       processArgs))
+            {
+                System.Threading.Thread.Sleep(150);
+                Check("跨平台托盘可启动长运行子进程", !smokeProcess.HasExited);
+                global::ChatRoomTray.CrossPlatformTrayHost.TerminateRuntimeProcess(smokeProcess);
+                Check("跨平台托盘可终止子进程树", smokeProcess.HasExited);
+            }
+
+            var lockPath = Path.Combine(directory, "chatroom-tray.lock");
+            using (var firstLock = global::ChatRoomTray.CrossPlatformTrayApplication.TryAcquireInstanceLock(lockPath))
+            {
+                using var secondLock = global::ChatRoomTray.CrossPlatformTrayApplication.TryAcquireInstanceLock(lockPath);
+                Check(
+                    "跨平台托盘单实例文件锁会拒绝第二实例",
+                    firstLock is not null && secondLock is null);
+            }
+            using (var reacquiredLock = global::ChatRoomTray.CrossPlatformTrayApplication.TryAcquireInstanceLock(lockPath))
+            {
+                Check("跨平台托盘锁在进程释放后可重新获取", reacquiredLock is not null);
+            }
+#endif
+
+#if LINUX_TRAY
+            var appIndicatorProbeSafe = true;
+            string? appIndicatorProbeError = null;
+            try
+            {
+                if (global::ChatRoomTray.NativeAppIndicator.TryLoad(out var nativeIndicator))
+                    nativeIndicator.Dispose();
+            }
+            catch (Exception error)
+            {
+                appIndicatorProbeSafe = false;
+                appIndicatorProbeError = error.Message;
+            }
+            Check(
+                "Linux AppIndicator 动态探测不会抛异常",
+                appIndicatorProbeSafe,
+                appIndicatorProbeError);
+
+            var watcherProbeSafe = true;
+            string? watcherProbeError = null;
+            try
+            {
+                _ = global::ChatRoomTray.LinuxDesktopSession.HasStatusNotifierWatcher();
+            }
+            catch (Exception error)
+            {
+                watcherProbeSafe = false;
+                watcherProbeError = error.Message;
+            }
+            Check(
+                "Linux StatusNotifierWatcher 探测不会抛异常",
+                watcherProbeSafe,
+                watcherProbeError);
+#endif
 
             // Timestamped config backups are rotated, while unrelated .bak files are untouched.
             for (var index = 0; index < 12; index++)

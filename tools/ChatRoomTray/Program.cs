@@ -18,12 +18,12 @@ internal static class Program
 #if NETFRAMEWORK
         return RunWindowsTrayBuild(args);
 #else
-        // On Linux/macOS this same project intentionally contains no tray code.
-        // No arguments (or --config) opens the integrated Eto configuration editor;
-        // the remaining commands are the cross-platform configuration CLI.
-        if (args.Length == 0
-            || args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
+        if (args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
             return ConfigEditorHost.Run();
+
+        if (args.Length == 0
+            || args.Any(arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
+            return CrossPlatformTrayApplication.Run();
 
         return ConfigEditorCommands.Run(args);
 #endif
@@ -50,6 +50,7 @@ internal static class Program
             MessageBox.Show(
                 "ChatRoomTray\n\n"
                 + "直接启动：常驻托盘并自动启动 ChatRoom。\n"
+                + "--tray：显式启动托盘（与直接启动相同）。\n"
                 + "--config：仅打开集成的配置编辑器。\n"
                 + "--check [path]：校验 ChatRoom 配置。\n"
                 + "--roundtrip <src> <dst>：配置往返验证。\n"
@@ -92,7 +93,8 @@ internal static class Program
         string.Equals(arg, "--check", StringComparison.OrdinalIgnoreCase)
         || string.Equals(arg, "--roundtrip", StringComparison.OrdinalIgnoreCase)
         || string.Equals(arg, "--selftest", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(arg, "--uismoke", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(arg, "--uismoke", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(arg, "--traysmoke", StringComparison.OrdinalIgnoreCase);
 
     private static void EnableDpiAwareness()
     {

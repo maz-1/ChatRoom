@@ -1,16 +1,16 @@
 # ChatRoomTray 配置编辑器模块
 
-该目录包含 `ChatRoomTray` 内置的 ChatRoom `config.json` 配置编辑器。配置编辑器没有拆成独立工程：Windows 下继续与托盘程序编译到同一个 `ChatRoomTray.exe`；Linux/macOS 使用同一个 `ChatRoomTray.csproj` 构建配置编辑器和配置 CLI，只排除 Windows 专用托盘源码。
+该目录包含 `ChatRoomTray` 内置的 ChatRoom `config.json` 配置编辑器。配置编辑器没有拆成独立工程：Windows 下继续与 WinForms 托盘编译到同一个 `ChatRoomTray.exe`；Linux/macOS 使用同一个 `ChatRoomTray.csproj` 构建配置编辑器、配置 CLI 与跨平台 tray host。
 
 ## 平台结构
 
 | 平台 | 目标框架 | Eto 后端 | 托盘 |
 | --- | --- | --- | --- |
 | Windows | .NET Framework 4.8 | Eto WinForms | 保留现有 WinForms Tray |
-| Linux | .NET 10 | Eto GTK | 不编译托盘 |
-| macOS | .NET 10 | Eto Mac64 | 不编译托盘 |
+| Linux | .NET 10 | Eto GTK | AppIndicator/StatusNotifierItem；无 watcher 时 fallback 窗口 |
+| macOS | .NET 10 | Eto Mac64 | Eto 原生 TrayIndicator |
 
-跨平台目标只排除 `StartupArgsDialog.cs`、`TrayApplicationContext.cs`、`TraySettings.cs`；`ConfigEditor` 源码、配置模型、校验、MCP 服务编辑和 ownerToken 管理均为同一份代码。
+跨平台目标只排除 Windows 专用的 `StartupArgsDialog.cs` 与 `TrayApplicationContext.cs`；`TraySettings.cs` 已改为纯托管 INI，三平台共用。`ConfigEditor` 源码、配置模型、校验、MCP 服务编辑和 ownerToken 管理也均为同一份代码。
 
 ## 默认路径
 
@@ -42,7 +42,7 @@ dotnet build
 
 macOS 使用 `net10.0 + Eto Mac64`，配置了 `osx-x64` 与 `osx-arm64` 两个 RID；`dotnet build` 会生成对应 `.app`。
 
-Linux GUI 需要 GTK3；认证功能还需要 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 构建继续使用 ILRepack 保持单 EXE。
+Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappindicator3`。KDE Plasma 原生提供 StatusNotifierWatcher；GNOME Shell 需启用 AppIndicator/KStatusNotifierItem 扩展。若 watcher/库不可用，会显示 fallback 控制窗口。认证功能另需 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 构建继续使用 ILRepack 保持单 EXE。
 
 ## 依赖
 
@@ -113,6 +113,7 @@ Linux 的 net10 构建可直接执行 apphost：
 ./ChatRoomTray --check
 ./ChatRoomTray --selftest
 ./ChatRoomTray --uismoke
+./ChatRoomTray --traysmoke
 ```
 
 macOS bundle 的 CLI 入口位于 `.app/Contents/MacOS/ChatRoomTray`，例如：
@@ -129,6 +130,8 @@ macOS bundle 的 CLI 入口位于 `.app/Contents/MacOS/ChatRoomTray`，例如：
 - .NET 10 + GTK：交叉编译 0 warning / 0 error。
 - Linux x64 self-contained：在 WSL2 Ubuntu 上真实运行 `--selftest` 通过，POSIX 命令解析和 XDG 路径生效。
 - Linux WSLg + GTK3：真实运行 Eto `--uismoke` 通过。
+- Linux WSLg 托盘：缺少 AppIndicator 库时 fallback window 路径可启动；`--traysmoke` exit 0 且不启动 ChatRoom。
+- Linux 托盘 SIGTERM：实测托盘和其 Node 子进程树都会结束，不遗留后台 Node。
 - Linux 缺少 `libsecret-1` 时：纯本地配置 `--check` 为 0 error + 1 warning，不会被错误阻止。
 - macOS Mac64：已交叉构建 `osx-x64` / `osx-arm64` 两个 `.app`，0 error；最终原生运行仍需在 macOS 机器上验证。
 
