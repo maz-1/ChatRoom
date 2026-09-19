@@ -8,7 +8,7 @@ public sealed class TextInputDialog : Form
 {
     private readonly TextBox _box;
 
-    public TextInputDialog(string title, string label, string initial)
+    public TextInputDialog(string title, string label, string initial, int clientWidth = 420)
     {
         Text = title;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -16,7 +16,7 @@ public sealed class TextInputDialog : Form
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(420, 130);
+        ClientSize = new Size(clientWidth, 130);
         AutoScaleMode = AutoScaleMode.Font;
 
         _box = new TextBox
@@ -32,7 +32,7 @@ public sealed class TextInputDialog : Form
             RowCount = 2,
             Padding = new Padding(12),
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));

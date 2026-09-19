@@ -38,7 +38,7 @@ bin\Debug\net48\ChatRoomTray.exe --config
 | MCP 服务 | `mcp.servers` 的**增删改**：`stdio`（命令/参数/环境变量/工作目录）与 `http`（URL/请求头/代理） |
 
 `mcp.servers` 的条目支持两种传输方式，字段与 ChatRoom 的校验规则一一对应。
-`stdio` 的“参数”使用列表编辑器，每个列表项对应一个独立 argv 参数，可新建、编辑、删除和调整顺序；“环境变量”用 `KEY=VALUE`。`http` 的“请求头”使用“键 / 值”两列表格，新建或编辑时分别填写 key 和 value；“填写 Auth Token…”可只输入 token，编辑器会自动写入 `Authorization: Bearer <token>`。
+`stdio` 的“参数”使用列表编辑器，每个列表项对应一个独立 argv 参数，可新建、编辑、删除和调整顺序；“命令”行右侧的“完整命令…”可直接粘贴整条 Windows 命令行，编辑器会自动拆分 executable 与各个参数并回填；“环境变量”用 `KEY=VALUE`。`http` 的“请求头”使用“键 / 值”两列表格，新建或编辑时分别填写 key 和 value；“填写 Auth Token…”可只输入 token，编辑器会自动写入 `Authorization: Bearer <token>`。
 
 ## ownerToken 的处理
 

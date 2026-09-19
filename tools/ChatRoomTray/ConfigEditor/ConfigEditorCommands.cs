@@ -221,6 +221,33 @@ internal static class ConfigEditorCommands
                     labels.Contains("键") && labels.Contains("值"));
             }
 
+            using (var completeCommandDialog = new TextInputDialog(
+                       "输入完整命令",
+                       "完整命令",
+                       string.Empty,
+                       clientWidth: 720))
+            {
+                completeCommandDialog.StartPosition = FormStartPosition.Manual;
+                completeCommandDialog.Location = new Point(-8000, -8000);
+                completeCommandDialog.Show();
+                Application.DoEvents();
+
+                var label = Walk(completeCommandDialog)
+                    .OfType<Label>()
+                    .FirstOrDefault(candidate => candidate.Text == "完整命令");
+                var preferred = label is null
+                    ? Size.Empty
+                    : TextRenderer.MeasureText(label.Text, label.Font);
+                Check(
+                    "完整命令输入窗口标签不换行",
+                    label is not null
+                    && label.Height <= preferred.Height + 4
+                    && label.Width >= preferred.Width,
+                    label is null
+                        ? "未找到标签"
+                        : $"label={label.Width}x{label.Height} preferred={preferred.Width}x{preferred.Height}");
+            }
+
             Check("校验结果面板存在", controls.OfType<ListView>().Any(view =>
                 view.Columns.Cast<ColumnHeader>().Any(column => column.Text == "级别")));
 
@@ -334,6 +361,42 @@ internal static class ConfigEditorCommands
                     "MCP stdio 参数列表提供编辑与排序操作",
                     new[] { "新建", "编辑", "删除", "上移", "下移" }
                         .All(argumentButtons.Contains));
+                Check(
+                    "MCP stdio 命令行提供完整命令导入",
+                    argumentButtons.Contains("完整命令…"));
+
+                var commandBox = Walk(dialog)
+                    .OfType<TextBox>()
+                    .FirstOrDefault(box => box.Name == "McpCommandBox");
+                var commandButton = Walk(dialog)
+                    .OfType<Button>()
+                    .FirstOrDefault(button => button.Name == "McpCompleteCommandButton");
+                var commandEditor = Walk(dialog)
+                    .OfType<TableLayoutPanel>()
+                    .FirstOrDefault(table => table.Name == "McpCommandEditor");
+                var commandLabel = Walk(dialog)
+                    .OfType<Label>()
+                    .FirstOrDefault(label => label.Text == "命令");
+                var commandAligned = commandBox is not null
+                    && commandButton is not null
+                    && commandEditor is not null
+                    && commandLabel is not null
+                    && commandEditor.Height <= Math.Max(commandBox.Height, commandButton.Height) + 8
+                    && Math.Abs(
+                        commandLabel.PointToScreen(Point.Empty).Y + commandLabel.Height / 2
+                        - commandBox.PointToScreen(Point.Empty).Y - commandBox.Height / 2) <= 4
+                    && Math.Abs(
+                        commandButton.PointToScreen(Point.Empty).Y + commandButton.Height / 2
+                        - commandBox.PointToScreen(Point.Empty).Y - commandBox.Height / 2) <= 4;
+                Check(
+                    "MCP stdio 命令行标签、输入框与按钮垂直对齐",
+                    commandAligned,
+                    commandEditor is null || commandBox is null || commandButton is null || commandLabel is null
+                        ? "缺少命令行控件"
+                        : $"label={commandLabel.Height}px/{commandLabel.PointToScreen(Point.Empty).Y + commandLabel.Height / 2} "
+                          + $"box={commandBox.Height}px/{commandBox.PointToScreen(Point.Empty).Y + commandBox.Height / 2} "
+                          + $"button={commandButton.Height}px/{commandButton.PointToScreen(Point.Empty).Y + commandButton.Height / 2} "
+                          + $"editor={commandEditor.Height}px");
             }
 
             var tables = Walk(dialog)
@@ -490,6 +553,18 @@ internal static class ConfigEditorCommands
         Check("base64url 长度 43", token.Length == 43);
         Check("base64url 字符集", token.All(c => char.IsLetterOrDigit(c) || c is '-' or '_'));
         Check("令牌提示不泄漏内容", OwnerToken.Describe(token) == "已设置 · 43 个字符", OwnerToken.Describe(token));
+
+        var commandParsed = CompleteCommandParser.TryParse(
+            "\"C:\\Program Files\\nodejs\\npx.cmd\" -y \"@scope/server\" \"D:\\My Data\" \"\"",
+            out var parsedCommand,
+            out var parsedArgs,
+            out var commandParseError);
+        Check(
+            "完整 stdio 命令按 Windows 命令行规则拆分",
+            commandParsed
+            && parsedCommand == @"C:\Program Files\nodejs\npx.cmd"
+            && parsedArgs.SequenceEqual(new[] { "-y", "@scope/server", @"D:\My Data", string.Empty }),
+            commandParseError);
 
         var defaults = ConfigStore.CreateDefault();
         var defaultIssues = ConfigValidator.Validate(

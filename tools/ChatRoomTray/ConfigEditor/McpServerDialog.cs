@@ -18,7 +18,13 @@ public sealed class McpServerDialog : Form
         DropDownStyle = ComboBoxStyle.DropDownList,
     };
 
-    private readonly TextBox _commandBox = new();
+    private readonly TextBox _commandBox = new() { Name = "McpCommandBox" };
+    private readonly Button _completeCommandButton = new()
+    {
+        Name = "McpCompleteCommandButton",
+        Text = "完整命令…",
+        AutoSize = true,
+    };
     private readonly ListBox _argsList = new()
     {
         Dock = DockStyle.Fill,
@@ -283,11 +289,74 @@ public sealed class McpServerDialog : Form
         cwdRow.Controls.Add(_cwdBox);
         cwdRow.Controls.Add(browse);
 
-        AddField(table, "命令", _commandBox);
+        AddField(table, "命令", BuildCommandEditor());
         AddField(table, "参数", BuildArgsEditor(), grow: true);
         AddField(table, "环境变量", _envBox, grow: true);
         AddField(table, "工作目录", cwdRow);
         return table;
+    }
+
+    private Control BuildCommandEditor()
+    {
+        _commandBox.Dock = DockStyle.Fill;
+        _completeCommandButton.MinimumSize = new Size(96, 0);
+        _completeCommandButton.Anchor = AnchorStyles.Left;
+        _completeCommandButton.Margin = new Padding(6, 0, 0, 0);
+        _completeCommandButton.Click += (_, _) => ImportCompleteCommand();
+
+        var layout = new TableLayoutPanel
+        {
+            Name = "McpCommandEditor",
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(_commandBox, 0, 0);
+        layout.Controls.Add(_completeCommandButton, 1, 0);
+        return layout;
+    }
+
+    private void ImportCompleteCommand()
+    {
+        using var dialog = new TextInputDialog(
+            "输入完整命令",
+            "完整命令",
+            string.Empty,
+            clientWidth: 720);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        if (!CompleteCommandParser.TryParse(
+                dialog.Value,
+                out var command,
+                out var arguments,
+                out var error))
+        {
+            Reject(error);
+            return;
+        }
+
+        _commandBox.Text = command;
+        _argsList.BeginUpdate();
+        try
+        {
+            _argsList.Items.Clear();
+            foreach (var argument in arguments)
+                _argsList.Items.Add(argument);
+        }
+        finally
+        {
+            _argsList.EndUpdate();
+        }
+
+        UpdateArgumentButtons();
+        _errorLabel.Text = string.Empty;
+        _commandBox.Focus();
     }
 
     private Control BuildArgsEditor()
