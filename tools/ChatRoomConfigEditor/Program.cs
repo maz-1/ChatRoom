@@ -184,6 +184,44 @@ internal static class Program
                 serverView is not null && serverView.Items.Count > 0,
                 serverView is null ? "未找到服务列表" : $"{serverView.Items.Count} 行");
 
+            using (var httpDialog = new McpServerDialog(
+                       "remote",
+                       new HttpMcpServerConfig
+                       {
+                           Url = "https://example.com/mcp",
+                           Headers = { ["Authorization"] = "Bearer test-token" },
+                       },
+                       new HashSet<string>(StringComparer.Ordinal)))
+            {
+                var httpControls = Walk(httpDialog).ToList();
+                var headerView = httpControls.OfType<ListView>()
+                    .FirstOrDefault(view => view.Name == "McpHeadersList");
+                Check(
+                    "HTTP MCP 请求头使用键值列表",
+                    headerView is not null
+                    && headerView.Columns.Count == 2
+                    && headerView.Columns[0].Text == "键"
+                    && headerView.Columns[1].Text == "值");
+                Check(
+                    "HTTP MCP 请求头能加载已有配置",
+                    headerView is not null
+                    && headerView.Items.Count == 1
+                    && headerView.Items[0].Text == "Authorization"
+                    && headerView.Items[0].SubItems.Count > 1
+                    && headerView.Items[0].SubItems[1].Text == "Bearer test-token");
+                Check(
+                    "HTTP MCP 提供 Auth Token 快捷按钮",
+                    httpControls.OfType<Button>().Any(button => button.Text == "填写 Auth Token…"));
+            }
+
+            using (var headerDialog = new HeaderInputDialog("测试请求头", string.Empty, string.Empty))
+            {
+                var labels = Walk(headerDialog).OfType<Label>().Select(label => label.Text).ToList();
+                Check(
+                    "请求头编辑窗口分别输入键和值",
+                    labels.Contains("键") && labels.Contains("值"));
+            }
+
             Check("校验结果面板存在", controls.OfType<ListView>().Any(view =>
                 view.Columns.Cast<ColumnHeader>().Any(column => column.Text == "级别")));
 

@@ -43,14 +43,20 @@ public sealed class McpServerDialog : Form
     private readonly TextBox _cwdBox = new() { Width = 420 };
 
     private readonly TextBox _urlBox = new();
-    private readonly TextBox _headersBox = new()
+    private readonly ListView _headersList = new()
     {
-        Multiline = true,
-        ScrollBars = ScrollBars.Vertical,
-        AcceptsReturn = true,
-        MinimumSize = new Size(0, 90),
-        Font = new Font("Consolas", 9f),
+        Dock = DockStyle.Fill,
+        View = View.Details,
+        FullRowSelect = true,
+        GridLines = true,
+        HideSelection = false,
+        MultiSelect = false,
+        MinimumSize = new Size(0, 120),
     };
+    private readonly Button _headerNewButton = new() { Text = "添加", AutoSize = true };
+    private readonly Button _headerEditButton = new() { Text = "编辑", AutoSize = true };
+    private readonly Button _headerDeleteButton = new() { Text = "删除", AutoSize = true };
+    private readonly Button _authTokenButton = new() { Text = "填写 Auth Token…", AutoSize = true };
     private readonly TextBox _proxyBox = new();
 
     private readonly TableLayoutPanel _stdioPanel;
@@ -160,7 +166,7 @@ public sealed class McpServerDialog : Form
                 _nameBox.Text = _originalName ?? string.Empty;
                 _typeBox.SelectedItem = "http";
                 _urlBox.Text = http.Url;
-                _headersBox.Text = FormatPairs(http.Headers, ": ");
+                LoadHeaders(http.Headers);
                 _proxyBox.Text = http.Proxy ?? string.Empty;
                 break;
 
@@ -236,7 +242,7 @@ public sealed class McpServerDialog : Form
                 return;
             }
 
-            if (!TryParsePairs(_headersBox.Text, ':', out var headers, out var headerError))
+            if (!TryCollectHeaders(out var headers, out var headerError))
             {
                 Reject($"请求头格式有误：{headerError}");
                 return;
@@ -411,11 +417,263 @@ public sealed class McpServerDialog : Form
         _argDownButton.Enabled = selected && index < _argsList.Items.Count - 1;
     }
 
+    private Control BuildHeadersEditor()
+    {
+        _headersList.Name = "McpHeadersList";
+        _headersList.Columns.Clear();
+        _headersList.Columns.Add(new ColumnHeader { Text = "键", Width = 170 });
+        _headersList.Columns.Add(new ColumnHeader { Text = "值", Width = 300 });
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(6, 0, 0, 0),
+        };
+        foreach (var button in new[]
+        {
+            _headerNewButton,
+            _headerEditButton,
+            _headerDeleteButton,
+            _authTokenButton,
+        })
+        {
+            button.MinimumSize = new Size(92, 0);
+            buttons.Controls.Add(button);
+        }
+
+        _headerNewButton.Click += (_, _) => AddHeader();
+        _headerEditButton.Click += (_, _) => EditHeader();
+        _headerDeleteButton.Click += (_, _) => DeleteHeader();
+        _authTokenButton.Click += (_, _) => SetAuthToken();
+        _headersList.DoubleClick += (_, _) => EditHeader();
+        _headersList.SelectedIndexChanged += (_, _) => UpdateHeaderButtons();
+        _headersList.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Insert)
+            {
+                AddHeader();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.F2)
+            {
+                EditHeader();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                DeleteHeader();
+                e.Handled = true;
+            }
+        };
+
+        layout.Controls.Add(_headersList, 0, 0);
+        layout.Controls.Add(buttons, 1, 0);
+        UpdateHeaderButtons();
+        return layout;
+    }
+
+    private void LoadHeaders(Dictionary<string, string> headers)
+    {
+        _headersList.Items.Clear();
+        foreach (var pair in headers)
+        {
+            var item = new ListViewItem(pair.Key);
+            item.SubItems.Add(pair.Value);
+            _headersList.Items.Add(item);
+        }
+
+        UpdateHeaderButtons();
+    }
+
+    private void AddHeader()
+    {
+        using var dialog = new HeaderInputDialog("新建请求头", string.Empty, string.Empty);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        if (FindHeaderIndex(dialog.HeaderKey) >= 0)
+        {
+            Reject($"请求头“{dialog.HeaderKey}”已存在。");
+            return;
+        }
+
+        var item = new ListViewItem(dialog.HeaderKey);
+        item.SubItems.Add(dialog.HeaderValue);
+        var index = _headersList.Items.Add(item).Index;
+        SelectHeader(index);
+        _errorLabel.Text = string.Empty;
+    }
+
+    private void EditHeader()
+    {
+        if (_headersList.SelectedIndices.Count == 0) return;
+        var index = _headersList.SelectedIndices[0];
+        var item = _headersList.Items[index];
+        var value = item.SubItems.Count > 1 ? item.SubItems[1].Text : string.Empty;
+
+        using var dialog = new HeaderInputDialog("编辑请求头", item.Text, value);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var duplicate = FindHeaderIndex(dialog.HeaderKey, index);
+        if (duplicate >= 0)
+        {
+            Reject($"请求头“{dialog.HeaderKey}”已存在。");
+            return;
+        }
+
+        item.Text = dialog.HeaderKey;
+        if (item.SubItems.Count > 1)
+            item.SubItems[1].Text = dialog.HeaderValue;
+        else
+            item.SubItems.Add(dialog.HeaderValue);
+
+        SelectHeader(index);
+        _errorLabel.Text = string.Empty;
+    }
+
+    private void DeleteHeader()
+    {
+        if (_headersList.SelectedIndices.Count == 0) return;
+        var index = _headersList.SelectedIndices[0];
+        _headersList.Items.RemoveAt(index);
+
+        if (_headersList.Items.Count > 0)
+            SelectHeader(Math.Min(index, _headersList.Items.Count - 1));
+        else
+            UpdateHeaderButtons();
+
+        _headersList.Focus();
+    }
+
+    private void SetAuthToken()
+    {
+        var index = FindHeaderIndex("Authorization");
+        var initial = string.Empty;
+        if (index >= 0)
+        {
+            var item = _headersList.Items[index];
+            var current = item.SubItems.Count > 1 ? item.SubItems[1].Text.Trim() : string.Empty;
+            if (current.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                initial = current.Substring("Bearer ".Length).Trim();
+        }
+
+        using var dialog = new TextInputDialog("设置 Auth Token", "Token", initial);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var token = dialog.Value.Trim();
+        if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            token = token.Substring("Bearer ".Length).Trim();
+
+        if (token.Length == 0)
+        {
+            Reject("Auth Token 不能为空。");
+            return;
+        }
+
+        var value = "Bearer " + token;
+        if (index >= 0)
+        {
+            var item = _headersList.Items[index];
+            if (item.SubItems.Count > 1)
+                item.SubItems[1].Text = value;
+            else
+                item.SubItems.Add(value);
+        }
+        else
+        {
+            var item = new ListViewItem("Authorization");
+            item.SubItems.Add(value);
+            index = _headersList.Items.Add(item).Index;
+        }
+
+        SelectHeader(index);
+        _errorLabel.Text = string.Empty;
+    }
+
+    private int FindHeaderIndex(string key, int exceptIndex = -1)
+    {
+        for (var index = 0; index < _headersList.Items.Count; index++)
+        {
+            if (index == exceptIndex) continue;
+            if (string.Equals(_headersList.Items[index].Text, key, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private void SelectHeader(int index)
+    {
+        _headersList.SelectedIndices.Clear();
+        if (index < 0 || index >= _headersList.Items.Count)
+        {
+            UpdateHeaderButtons();
+            return;
+        }
+
+        var item = _headersList.Items[index];
+        item.Selected = true;
+        item.Focused = true;
+        item.EnsureVisible();
+        _headersList.Focus();
+        UpdateHeaderButtons();
+    }
+
+    private void UpdateHeaderButtons()
+    {
+        var selected = _headersList.SelectedIndices.Count > 0;
+        _headerEditButton.Enabled = selected;
+        _headerDeleteButton.Enabled = selected;
+    }
+
+    private bool TryCollectHeaders(
+        out Dictionary<string, string> headers,
+        out string error)
+    {
+        headers = new Dictionary<string, string>(StringComparer.Ordinal);
+        error = string.Empty;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (ListViewItem item in _headersList.Items)
+        {
+            var key = item.Text.Trim();
+            if (key.Length == 0)
+            {
+                error = "请求头的键不能为空。";
+                return false;
+            }
+
+            if (!seen.Add(key))
+            {
+                error = $"存在重复的请求头“{key}”。";
+                return false;
+            }
+
+            var value = item.SubItems.Count > 1 ? item.SubItems[1].Text : string.Empty;
+            headers[key] = value;
+        }
+
+        return true;
+    }
+
     private TableLayoutPanel BuildHttpPanel()
     {
         var table = NewFieldTable();
         AddField(table, "URL", _urlBox);
-        AddField(table, "请求头", _headersBox, grow: true);
+        AddField(table, "请求头", BuildHeadersEditor(), grow: true);
         AddField(table, "代理", _proxyBox);
         return table;
     }
@@ -488,8 +746,8 @@ public sealed class McpServerDialog : Form
     }
 
     /// <summary>
-    /// Parses "KEY=value" (env) or "Header: value" (headers) lines. Splitting on
-    /// the first separator keeps values containing it intact.
+    /// Parses KEY=value environment-variable lines. Splitting on the first
+    /// separator keeps values containing '=' intact.
     /// </summary>
     private static bool TryParsePairs(
         string text,
