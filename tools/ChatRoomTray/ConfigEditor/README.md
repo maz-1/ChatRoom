@@ -42,7 +42,7 @@ dotnet build
 
 macOS 使用 `net8.0 + Eto Mac64`，配置了 `osx-x64` 与 `osx-arm64` 两个 RID；`dotnet build` 会生成对应 `.app`。
 
-Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappindicator3`。KDE Plasma 原生提供 StatusNotifierWatcher；GNOME Shell 需启用 AppIndicator/KStatusNotifierItem 扩展。若 watcher/库不可用，会显示 fallback 控制窗口。认证功能另需 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 如需物理上只有一个 EXE 的发布包，使用 .NET 8 `PublishSingleFile` + `IncludeNativeLibrariesForSelfExtract`。
+Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappindicator3`。KDE Plasma 原生提供 StatusNotifierWatcher；GNOME Shell 需启用 AppIndicator/KStatusNotifierItem 扩展。若 watcher/库不可用，会显示 fallback 控制窗口。认证功能另需 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Visual Studio profile `win-x64-single-file` publishes a framework-dependent single EXE (about 3 MiB in the current build). The target PC must have Microsoft .NET 8 Desktop Runtime x64 installed.
 
 ## 依赖
 

@@ -54,7 +54,7 @@ cd tools/ChatRoomTray
 dotnet build -c Release
 ```
 
-Output: `bin/Release/net8.0-windows/ChatRoomTray.exe` plus its managed/runtime dependencies.
+Visual Studio profile `win-x64-single-file` publishes a framework-dependent single EXE (about 3 MiB in the current build). The target PC must have Microsoft .NET 8 Desktop Runtime x64 installed.
 
 For a self-contained single-file Windows package, use the .NET 8 publisher:
 
