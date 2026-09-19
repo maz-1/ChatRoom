@@ -8,6 +8,7 @@ export type {
   CloudManagementSession,
   CloudRestoreResult,
   AuthStatus,
+  OAuthClientSummary,
   ComputerPermission,
   ComputerPreviewView,
   ComputerStatus,

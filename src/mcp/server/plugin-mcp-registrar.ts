@@ -5,8 +5,12 @@ import type {
   ToolCallback,
   CallToolResult,
 } from "@modelcontextprotocol/server";
-import { asChatRoomError } from "../../core/errors/chatroom-error.js";
+import {
+  asChatRoomError,
+  ChatRoomError,
+} from "../../core/errors/chatroom-error.js";
 import type { OperationLog } from "../../operations/operation-log.js";
+import { currentMcpOAuthClient } from "./request-context.js";
 import { mcpTool } from "./tool-support.js";
 import type { McpToolControl } from "./tool-control.js";
 
@@ -65,6 +69,13 @@ export class PluginMcpRegistrar {
 
     const { action, audit, present, ...toolConfig } = config;
     const callback = mcpTool<PluginToolInput<InputSchema>>(async (input) => {
+      const oauthClient = currentMcpOAuthClient();
+      if (oauthClient?.disabled)
+        throw new ChatRoomError(
+          "FORBIDDEN",
+          `OAuth client is disabled: ${oauthClient.clientId}`,
+        );
+
       const operation = this.operations.start({
         pluginId: this.pluginId,
         source: "mcp",

@@ -22,6 +22,14 @@ export function migrateDatabase(db: DatabaseSync): void {
         migrate2To3(db);
         version = 3;
         break;
+      case 3:
+        migrate3To4(db);
+        version = 4;
+        break;
+      case 4:
+        migrate4To5(db);
+        version = 5;
+        break;
       default:
         throw new Error(`Unsupported ChatRoom database schema: ${version}`);
     }
@@ -81,6 +89,40 @@ function migrate2To3(db: DatabaseSync): void {
       PRAGMA user_version = 3;
       COMMIT;
     `);
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function migrate3To4(db: DatabaseSync): void {
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    const columns = db
+      .prepare("PRAGMA table_info(oauth_clients)")
+      .all() as unknown as Array<{ name: string }>;
+    if (columns.length > 0) {
+      if (!columns.some((column) => column.name === "disabled_at"))
+        db.exec("ALTER TABLE oauth_clients ADD COLUMN disabled_at TEXT;");
+    }
+    db.exec("PRAGMA user_version = 4; COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function migrate4To5(db: DatabaseSync): void {
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    const columns = db
+      .prepare("PRAGMA table_info(oauth_clients)")
+      .all() as unknown as Array<{ name: string }>;
+    if (columns.length > 0 && !columns.some((column) => column.name === "note"))
+      db.exec(
+        "ALTER TABLE oauth_clients ADD COLUMN note TEXT NOT NULL DEFAULT '';",
+      );
+    db.exec("PRAGMA user_version = 5; COMMIT;");
   } catch (error) {
     db.exec("ROLLBACK;");
     throw error;

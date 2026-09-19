@@ -22,6 +22,7 @@ import { CHATROOM_VERSION } from "../../core/runtime/identity.js";
 import { runWithMcpAccessScope } from "../../mcp/server/request-context.js";
 import type { SystemLogger } from "../logging/logger.js";
 import type { SystemLogReader } from "../logging/log-reader.js";
+import { oauthClientContextForRequest } from "./mcp-auth-context.js";
 
 const WEB_UI_RESERVED_PREFIXES = [
   "/api",
@@ -94,9 +95,11 @@ export class HttpServer {
       mcpAuthentication(this.auth, this.ingress),
       (req, res) => {
         const scope = this.ingress.isExternalMcp(req) ? "remote" : "local";
-        runWithMcpAccessScope(scope, () => {
-          void nodeMcp(req, res, req.body);
-        });
+        runWithMcpAccessScope(
+          scope,
+          () => void nodeMcp(req, res, req.body),
+          oauthClientContextForRequest(req, this.auth),
+        );
       },
     );
 

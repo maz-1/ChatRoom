@@ -13,6 +13,7 @@ export type View =
   | "computer"
   | "mcp-servers"
   | "tools"
+  | "oauth-clients"
   | "cloud"
   | "operations"
   | "systemLogs";
@@ -69,6 +70,15 @@ const definitions: readonly ViewDefinition[] = [
     icon: "$mdiTuneVariant",
     component: defineAsyncComponent(
       () => import("../components/McpToolsView.vue"),
+    ),
+  },
+  {
+    id: "oauth-clients",
+    path: "/oauth-clients",
+    titleKey: "nav.oauthClients",
+    icon: "$mdiKeyOutline",
+    component: defineAsyncComponent(
+      () => import("../components/OAuthClientsView.vue"),
     ),
   },
   {

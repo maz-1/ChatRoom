@@ -23,6 +23,7 @@ import type { SystemLogSink } from "../../../core/logging/types.js";
 import type { SystemLogReader } from "../../../infrastructure/logging/log-reader.js";
 import { defaultConfigPath } from "../../../config/load-config.js";
 import { createMcpApiRouter } from "./mcp-api-router.js";
+import { createOAuthClientsApiRouter } from "./oauth-clients-api-router.js";
 
 export function createApiRouter(
   application: WebRuntime,
@@ -43,6 +44,7 @@ export function createApiRouter(
   router.use(createPublicAuthApiRouter(auth, passkeys, ingress, logger));
   router.use(apiAuthentication(auth, ingress));
   router.use(createPrivateAuthApiRouter(passkeys, ingress, logger));
+  router.use(createOAuthClientsApiRouter(auth));
   router.use(createRuntimeApiRouter(application, eventBus, runtimeStatus));
   router.use(createLogsApiRouter(logReader, logger));
 

@@ -62,6 +62,16 @@ export interface AuthStatus {
   passkeyRegistered: boolean;
 }
 
+export interface OAuthClientSummary {
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  createdAt: string;
+  disabledAt: string | null;
+  note: string;
+  lastAccessAt: string | null;
+}
+
 export interface PasskeySummary {
   id: string;
   name: string;

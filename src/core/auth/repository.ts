@@ -3,6 +3,8 @@ export interface OAuthClientRecord {
   name: string;
   redirectUris: string[];
   createdAt: string;
+  disabledAt: string | null;
+  note: string;
 }
 
 export interface OAuthCodeRecord {
@@ -24,6 +26,13 @@ export interface OAuthTokenRecord {
 export interface OAuthStateRepository {
   createClient(client: OAuthClientRecord): void;
   getClient(clientId: string): OAuthClientRecord | null;
+  listClients(): OAuthClientRecord[];
+  setClientDisabled(
+    clientId: string,
+    disabledAt: string | null,
+  ): OAuthClientRecord | null;
+  setClientNote(clientId: string, note: string): OAuthClientRecord | null;
+  deleteClient(clientId: string): boolean;
   createCode(code: OAuthCodeRecord): void;
   getCode(codeHash: string): OAuthCodeRecord | null;
   consumeCode(codeHash: string, now: string): OAuthCodeRecord | null;

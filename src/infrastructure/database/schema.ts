@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 3;
+export const DATABASE_SCHEMA_VERSION = 5;
 
 export const DATABASE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS operations (
@@ -25,7 +25,9 @@ export const DATABASE_SCHEMA = `
     client_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     redirect_uris_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    disabled_at TEXT,
+    note TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS oauth_codes (
     code_hash TEXT PRIMARY KEY,

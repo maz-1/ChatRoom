@@ -9,6 +9,7 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import type { SystemLogRecord } from "../../src/core/logging/types.js";
+import { OAuthRepository } from "../../src/infrastructure/database/oauth-repository.js";
 import { createTestRuntime } from "../helpers/runtime.js";
 
 test("HTTP API and real MCP client share the same Application runtime", async () => {
@@ -390,3 +391,91 @@ function assertRegistrationLog(input: {
   assert.equal(typeof value.sourceAddress, "string");
   assert.equal(typeof value.sourcePort, "number");
 }
+
+test("WebUI OAuth client management API lists, disables, and deletes revoked clients", async () => {
+  const runtime = await createTestRuntime();
+  try {
+    const repository = new OAuthRepository(runtime.components.database);
+    repository.createClient({
+      clientId: "client_webui_test",
+      name: "WebUI Test Client",
+      redirectUris: ["http://127.0.0.1/callback"],
+      createdAt: "2026-09-19T12:00:00.000Z",
+      disabledAt: null,
+      note: "",
+    });
+
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    const base = `http://127.0.0.1:${address.port}`;
+
+    const listResponse = await fetch(`${base}/api/oauth-clients`);
+    assert.equal(listResponse.status, 200);
+    const listed = (await listResponse.json()) as {
+      clients: Array<{
+        clientId: string;
+        disabledAt: string | null;
+        note: string;
+        lastAccessAt: string | null;
+      }>;
+    };
+    assert.deepEqual(listed.clients, [
+      {
+        clientId: "client_webui_test",
+        name: "WebUI Test Client",
+        redirectUris: ["http://127.0.0.1/callback"],
+        createdAt: "2026-09-19T12:00:00.000Z",
+        disabledAt: null,
+        note: "",
+        lastAccessAt: null,
+      },
+    ]);
+
+    const noteResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ note: "Primary ChatGPT desktop client" }),
+      },
+    );
+    assert.equal(noteResponse.status, 200);
+    const noted = (await noteResponse.json()) as { note: string };
+    assert.equal(noted.note, "Primary ChatGPT desktop client");
+    assert.equal(
+      repository.getClient("client_webui_test")?.note,
+      "Primary ChatGPT desktop client",
+    );
+
+    const disableResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ disabled: true }),
+      },
+    );
+    assert.equal(disableResponse.status, 200);
+    const disabled = (await disableResponse.json()) as {
+      disabledAt: string | null;
+    };
+    assert.ok(disabled.disabledAt);
+
+    const revokeResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test/revoke`,
+      { method: "POST" },
+    );
+    assert.equal(revokeResponse.status, 200);
+    assert.deepEqual(await revokeResponse.json(), {
+      clientId: "client_webui_test",
+    });
+    assert.equal(repository.getClient("client_webui_test"), null);
+
+    const afterDelete = await fetch(`${base}/api/oauth-clients`);
+    assert.equal(afterDelete.status, 200);
+    assert.deepEqual(await afterDelete.json(), { clients: [] });
+  } finally {
+    await runtime.cleanup();
+  }
+});
