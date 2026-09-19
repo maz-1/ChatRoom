@@ -1,78 +1,63 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using Eto.Drawing;
+using Eto.Forms;
 
 namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>Adds or edits a single entry under <c>mcp.servers</c>.</summary>
-public sealed class McpServerDialog : Form
+public sealed class McpServerDialog : Dialog<bool>
 {
-    private readonly TextBox _nameBox = new() { Dock = DockStyle.Fill };
-    private readonly ComboBox _typeBox = new()
-    {
-        Dock = DockStyle.Left,
-        Width = 140,
-        DropDownStyle = ComboBoxStyle.DropDownList,
-    };
+    private readonly TextBox _nameBox = new();
+    private readonly DropDown _typeBox = new() { Width = 140 };
 
-    private readonly TextBox _commandBox = new() { Name = "McpCommandBox" };
+    private readonly TextBox _commandBox = new() { ID = "McpCommandBox", Width = 500 };
     private readonly Button _completeCommandButton = new()
     {
-        Name = "McpCompleteCommandButton",
+        ID = "McpCompleteCommandButton",
         Text = "完整命令…",
-        AutoSize = true,
     };
     private readonly ListBox _argsList = new()
     {
-        Dock = DockStyle.Fill,
-        IntegralHeight = false,
-        HorizontalScrollbar = true,
-        MinimumSize = new Size(0, 110),
-        Font = new Font("Consolas", 9f),
+        ID = "McpArgsList",
+        Width = 500,
+        Height = 110,
     };
-    private readonly Button _argNewButton = new() { Text = "新建", AutoSize = true };
-    private readonly Button _argEditButton = new() { Text = "编辑", AutoSize = true };
-    private readonly Button _argDeleteButton = new() { Text = "删除", AutoSize = true };
-    private readonly Button _argUpButton = new() { Text = "上移", AutoSize = true };
-    private readonly Button _argDownButton = new() { Text = "下移", AutoSize = true };
-    private readonly TextBox _envBox = new()
-    {
-        Multiline = true,
-        ScrollBars = ScrollBars.Vertical,
-        AcceptsReturn = true,
-        MinimumSize = new Size(0, 70),
-        Font = new Font("Consolas", 9f),
-    };
-    private readonly TextBox _cwdBox = new() { Width = 420 };
+    private readonly List<string> _arguments = new();
+    private readonly Button _argNewButton = new() { Text = "新建" };
+    private readonly Button _argEditButton = new() { Text = "编辑" };
+    private readonly Button _argDeleteButton = new() { Text = "删除" };
+    private readonly Button _argUpButton = new() { Text = "上移" };
+    private readonly Button _argDownButton = new() { Text = "下移" };
+    private readonly TextArea _envBox = new() { Width = 580, Height = 80 };
+    private readonly TextBox _cwdBox = new() { Width = 500 };
 
-    private readonly TextBox _urlBox = new();
-    private readonly ListView _headersList = new()
+    private readonly TextBox _urlBox = new() { Width = 580 };
+    private readonly GridView _headersList = new()
     {
-        Dock = DockStyle.Fill,
-        View = View.Details,
-        FullRowSelect = true,
-        GridLines = true,
-        HideSelection = false,
-        MultiSelect = false,
-        MinimumSize = new Size(0, 120),
+        ID = "McpHeadersList",
+        AllowMultipleSelection = false,
+        ShowHeader = true,
+        Width = 420,
+        Height = 130,
     };
-    private readonly Button _headerNewButton = new() { Text = "添加", AutoSize = true };
-    private readonly Button _headerEditButton = new() { Text = "编辑", AutoSize = true };
-    private readonly Button _headerDeleteButton = new() { Text = "删除", AutoSize = true };
-    private readonly Button _authTokenButton = new() { Text = "填写 Auth Token…", AutoSize = true };
-    private readonly TextBox _proxyBox = new();
+    private readonly List<HeaderRow> _headers = new();
+    private readonly Button _headerNewButton = new() { Text = "添加" };
+    private readonly Button _headerEditButton = new() { Text = "编辑" };
+    private readonly Button _headerDeleteButton = new() { Text = "删除" };
+    private readonly Button _authTokenButton = new() { Text = "填写 Auth Token…" };
+    private readonly TextBox _proxyBox = new() { Width = 580 };
 
-    private readonly TableLayoutPanel _stdioPanel;
-    private readonly TableLayoutPanel _httpPanel;
+    private readonly Panel _transportPanel = new() { Width = 700 };
+    private readonly DynamicLayout _stdioPanel;
+    private readonly DynamicLayout _httpPanel;
     private readonly Label _errorLabel = new()
     {
-        Dock = DockStyle.Fill,
-        ForeColor = Color.Firebrick,
-        AutoSize = false,
+        TextColor = Colors.Firebrick,
         Height = 40,
+        Wrap = WrapMode.Word,
     };
 
     private readonly HashSet<string> _takenNames;
@@ -86,73 +71,46 @@ public sealed class McpServerDialog : Form
         _originalName = originalName;
         _takenNames = takenNames;
 
-        Text = originalName is null ? "添加 MCP 服务" : $"编辑 MCP 服务：{originalName}";
-        MinimumSize = new Size(680, 560);
-        Size = new Size(760, 640);
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.Sizable;
+        Title = originalName is null ? "添加 MCP 服务" : $"编辑 MCP 服务：{originalName}";
+        MinimumSize = new Size(680, 540);
+        AutoSize = false;
+        Resizable = true;
         ShowInTaskbar = false;
-        AutoScaleMode = AutoScaleMode.Font;
 
-        _typeBox.Items.AddRange(new object[] { "stdio", "http" });
-
+        _typeBox.DataStore = new[] { "stdio", "http" };
         _stdioPanel = BuildStdioPanel();
         _httpPanel = BuildHttpPanel();
 
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 4,
-            Padding = new Padding(12),
-        };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        root.Controls.Add(FieldLabel("名称"), 0, 0);
-        root.Controls.Add(_nameBox, 1, 0);
-        root.Controls.Add(FieldLabel("传输方式"), 0, 1);
-        root.Controls.Add(_typeBox, 1, 1);
-
-        var holder = new Panel { Dock = DockStyle.Fill };
-        holder.Controls.Add(_httpPanel);
-        holder.Controls.Add(_stdioPanel);
-        root.Controls.Add(holder, 0, 2);
-        root.SetColumnSpan(holder, 2);
-
-        root.Controls.Add(_errorLabel, 0, 3);
-        root.SetColumnSpan(_errorLabel, 2);
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            FlowDirection = FlowDirection.RightToLeft,
-            AutoSize = true,
-            Padding = new Padding(12, 0, 12, 12),
-        };
-        var ok = new Button { Text = "确定", AutoSize = true, DialogResult = DialogResult.None };
-        var cancel = new Button { Text = "取消", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var ok = new Button { Text = "确定" };
+        var cancel = new Button { Text = "取消" };
         ok.Click += (_, _) => Confirm();
-        buttons.Controls.AddRange(new Control[] { ok, cancel });
+        cancel.Click += (_, _) => Close(false);
+        DefaultButton = ok;
+        AbortButton = cancel;
 
-        Controls.Add(root);
-        Controls.Add(buttons);
-        CancelButton = cancel;
-        AcceptButton = ok;
+        var fields = new DynamicLayout
+        {
+            Padding = new Padding(12),
+            Spacing = new Size(8, 8),
+        };
+        AddField(fields, "名称", _nameBox);
+        AddField(fields, "传输方式", _typeBox);
+        fields.Add(_transportPanel);
+        fields.AddRow(_errorLabel);
+        fields.Add(null, yscale: true);
+        fields.AddSeparateRow(null, cancel, ok);
+        Content = fields;
 
         _typeBox.SelectedIndexChanged += (_, _) => ApplyTypeVisibility();
         _nameBox.TextChanged += (_, _) => _errorLabel.Text = string.Empty;
 
         LoadFrom(server);
+        Size = new Size(680, 540);
     }
 
     public string ServerName { get; private set; } = string.Empty;
 
-    public McpServerConfig? Result { get; private set; }
+    public McpServerConfig? ServerConfig { get; private set; }
 
     private void LoadFrom(McpServerConfig? server)
     {
@@ -160,17 +118,18 @@ public sealed class McpServerDialog : Form
         {
             case StdioMcpServerConfig stdio:
                 _nameBox.Text = _originalName ?? string.Empty;
-                _typeBox.SelectedItem = "stdio";
+                _typeBox.SelectedIndex = 0;
                 _commandBox.Text = stdio.Command;
-                _argsList.Items.Clear();
-                foreach (var argument in stdio.Args) _argsList.Items.Add(argument);
+                _arguments.Clear();
+                _arguments.AddRange(stdio.Args);
+                RefreshArguments();
                 _envBox.Text = FormatPairs(stdio.Env, "=");
                 _cwdBox.Text = stdio.Cwd ?? string.Empty;
                 break;
 
             case HttpMcpServerConfig http:
                 _nameBox.Text = _originalName ?? string.Empty;
-                _typeBox.SelectedItem = "http";
+                _typeBox.SelectedIndex = 1;
                 _urlBox.Text = http.Url;
                 LoadHeaders(http.Headers);
                 _proxyBox.Text = http.Proxy ?? string.Empty;
@@ -178,7 +137,9 @@ public sealed class McpServerDialog : Form
 
             default:
                 _nameBox.Text = string.Empty;
-                _typeBox.SelectedItem = "stdio";
+                _typeBox.SelectedIndex = 0;
+                RefreshArguments();
+                LoadHeaders(new Dictionary<string, string>());
                 break;
         }
 
@@ -187,16 +148,12 @@ public sealed class McpServerDialog : Form
 
     private void ApplyTypeVisibility()
     {
-        var stdio = (string?)_typeBox.SelectedItem == "stdio";
-        _stdioPanel.Visible = stdio;
-        _httpPanel.Visible = !stdio;
-        if (stdio) _stdioPanel.BringToFront();
-        else _httpPanel.BringToFront();
+        _transportPanel.Content = _typeBox.SelectedIndex == 1 ? _httpPanel : _stdioPanel;
     }
 
     private void Confirm()
     {
-        var name = _nameBox.Text.Trim();
+        var name = (_nameBox.Text ?? string.Empty).Trim();
         if (name.Length == 0)
         {
             Reject("请填写服务名称。");
@@ -215,33 +172,33 @@ public sealed class McpServerDialog : Form
             return;
         }
 
-        if ((string?)_typeBox.SelectedItem == "stdio")
+        if (_typeBox.SelectedIndex != 1)
         {
-            var command = _commandBox.Text.Trim();
+            var command = (_commandBox.Text ?? string.Empty).Trim();
             if (command.Length == 0)
             {
                 Reject("stdio 服务必须填写启动命令。");
                 return;
             }
 
-            if (!TryParsePairs(_envBox.Text, '=', out var env, out var envError))
+            if (!TryParsePairs(_envBox.Text ?? string.Empty, '=', out var env, out var envError))
             {
                 Reject($"环境变量格式有误：{envError}");
                 return;
             }
 
             ServerName = name;
-            Result = new StdioMcpServerConfig
+            ServerConfig = new StdioMcpServerConfig
             {
                 Command = command,
-                Args = _argsList.Items.Cast<string>().ToList(),
+                Args = _arguments.ToList(),
                 Env = env,
-                Cwd = NullIfBlank(_cwdBox.Text),
+                Cwd = NullIfBlank(_cwdBox.Text ?? string.Empty),
             };
         }
         else
         {
-            var url = _urlBox.Text.Trim();
+            var url = (_urlBox.Text ?? string.Empty).Trim();
             if (url.Length == 0 || !Uri.TryCreate(url, UriKind.Absolute, out _))
             {
                 Reject("http 服务必须填写合法的绝对 URL。");
@@ -255,40 +212,36 @@ public sealed class McpServerDialog : Form
             }
 
             ServerName = name;
-            Result = new HttpMcpServerConfig
+            ServerConfig = new HttpMcpServerConfig
             {
                 Url = url,
                 Headers = headers,
-                Proxy = NullIfBlank(_proxyBox.Text),
+                Proxy = NullIfBlank(_proxyBox.Text ?? string.Empty),
             };
         }
 
-        DialogResult = DialogResult.OK;
-        Close();
+        Close(true);
     }
 
     private void Reject(string message) => _errorLabel.Text = message;
 
-    private TableLayoutPanel BuildStdioPanel()
+    private DynamicLayout BuildStdioPanel()
     {
-        var table = NewFieldTable();
-
-        var cwdRow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = false,
-        };
-        var browse = new Button { Text = "浏览…", AutoSize = true };
+        var browse = new Button { Text = "浏览…" };
         browse.Click += (_, _) =>
         {
-            using var dialog = new FolderBrowserDialog { Description = "选择工作目录" };
-            if (dialog.ShowDialog(this) == DialogResult.OK) _cwdBox.Text = dialog.SelectedPath;
+            using var dialog = new SelectFolderDialog
+            {
+                Title = "选择工作目录",
+                Directory = DirectoryOrHome(_cwdBox.Text),
+            };
+            if (dialog.ShowDialog(this) == DialogResult.Ok)
+                _cwdBox.Text = dialog.Directory;
         };
-        cwdRow.Controls.Add(_cwdBox);
-        cwdRow.Controls.Add(browse);
 
+        var cwdRow = Horizontal(_cwdBox, browse);
+
+        var table = NewFieldLayout();
         AddField(table, "命令", BuildCommandEditor());
         AddField(table, "参数", BuildArgsEditor(), grow: true);
         AddField(table, "环境变量", _envBox, grow: true);
@@ -298,27 +251,18 @@ public sealed class McpServerDialog : Form
 
     private Control BuildCommandEditor()
     {
-        _commandBox.Dock = DockStyle.Fill;
         _completeCommandButton.MinimumSize = new Size(96, 0);
-        _completeCommandButton.Anchor = AnchorStyles.Left;
-        _completeCommandButton.Margin = new Padding(6, 0, 0, 0);
         _completeCommandButton.Click += (_, _) => ImportCompleteCommand();
 
-        var layout = new TableLayoutPanel
+        var layout = new StackLayout
         {
-            Name = "McpCommandEditor",
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
+            ID = "McpCommandEditor",
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.Controls.Add(_commandBox, 0, 0);
-        layout.Controls.Add(_completeCommandButton, 1, 0);
+        layout.Items.Add(new StackLayoutItem(_commandBox, true));
+        layout.Items.Add(new StackLayoutItem(_completeCommandButton, false));
         return layout;
     }
 
@@ -329,7 +273,7 @@ public sealed class McpServerDialog : Form
             "完整命令",
             string.Empty,
             clientWidth: 720);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!dialog.ShowModal(this)) return;
 
         if (!CompleteCommandParser.TryParse(
                 dialog.Value,
@@ -342,46 +286,15 @@ public sealed class McpServerDialog : Form
         }
 
         _commandBox.Text = command;
-        _argsList.BeginUpdate();
-        try
-        {
-            _argsList.Items.Clear();
-            foreach (var argument in arguments)
-                _argsList.Items.Add(argument);
-        }
-        finally
-        {
-            _argsList.EndUpdate();
-        }
-
-        UpdateArgumentButtons();
+        _arguments.Clear();
+        _arguments.AddRange(arguments);
+        RefreshArguments();
         _errorLabel.Text = string.Empty;
         _commandBox.Focus();
     }
 
     private Control BuildArgsEditor()
     {
-        _argsList.Name = "McpArgsList";
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            AutoSize = true,
-            Margin = new Padding(6, 0, 0, 0),
-        };
         foreach (var button in new[]
         {
             _argNewButton,
@@ -390,39 +303,43 @@ public sealed class McpServerDialog : Form
             _argUpButton,
             _argDownButton,
         })
-        {
             button.MinimumSize = new Size(72, 0);
-            buttons.Controls.Add(button);
-        }
 
         _argNewButton.Click += (_, _) => AddArgument();
         _argEditButton.Click += (_, _) => EditArgument();
         _argDeleteButton.Click += (_, _) => DeleteArgument();
         _argUpButton.Click += (_, _) => MoveArgument(-1);
         _argDownButton.Click += (_, _) => MoveArgument(1);
-        _argsList.DoubleClick += (_, _) => EditArgument();
+        _argsList.Activated += (_, _) => EditArgument();
         _argsList.SelectedIndexChanged += (_, _) => UpdateArgumentButtons();
         _argsList.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Insert)
+            if (e.Key == Keys.Insert)
             {
                 AddArgument();
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.F2)
+            else if (e.Key == Keys.F2)
             {
                 EditArgument();
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.Delete)
+            else if (e.Key == Keys.Delete)
             {
                 DeleteArgument();
                 e.Handled = true;
             }
         };
 
-        layout.Controls.Add(_argsList, 0, 0);
-        layout.Controls.Add(buttons, 1, 0);
+        var layout = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        layout.Items.Add(new StackLayoutItem(_argsList, true));
+        layout.Items.Add(new StackLayoutItem(
+            Vertical(_argNewButton, _argEditButton, _argDeleteButton, _argUpButton, _argDownButton),
+            false));
         UpdateArgumentButtons();
         return layout;
     }
@@ -430,36 +347,33 @@ public sealed class McpServerDialog : Form
     private void AddArgument()
     {
         using var dialog = new TextInputDialog("新建参数", "参数", string.Empty);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Value.Length == 0) return;
+        if (!dialog.ShowModal(this) || dialog.Value.Length == 0) return;
 
-        var index = _argsList.Items.Add(dialog.Value);
-        _argsList.SelectedIndex = index;
+        _arguments.Add(dialog.Value);
+        RefreshArguments(_arguments.Count - 1);
         _argsList.Focus();
     }
 
     private void EditArgument()
     {
         var index = _argsList.SelectedIndex;
-        if (index < 0) return;
+        if (index < 0 || index >= _arguments.Count) return;
 
-        var current = (string)_argsList.Items[index];
-        using var dialog = new TextInputDialog("编辑参数", "参数", current);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Value.Length == 0) return;
+        using var dialog = new TextInputDialog("编辑参数", "参数", _arguments[index]);
+        if (!dialog.ShowModal(this) || dialog.Value.Length == 0) return;
 
-        _argsList.Items[index] = dialog.Value;
-        _argsList.SelectedIndex = index;
+        _arguments[index] = dialog.Value;
+        RefreshArguments(index);
         _argsList.Focus();
     }
 
     private void DeleteArgument()
     {
         var index = _argsList.SelectedIndex;
-        if (index < 0) return;
+        if (index < 0 || index >= _arguments.Count) return;
 
-        _argsList.Items.RemoveAt(index);
-        if (_argsList.Items.Count > 0)
-            _argsList.SelectedIndex = Math.Min(index, _argsList.Items.Count - 1);
-        UpdateArgumentButtons();
+        _arguments.RemoveAt(index);
+        RefreshArguments(_arguments.Count == 0 ? -1 : Math.Min(index, _arguments.Count - 1));
         _argsList.Focus();
     }
 
@@ -467,13 +381,21 @@ public sealed class McpServerDialog : Form
     {
         var index = _argsList.SelectedIndex;
         var target = index + delta;
-        if (index < 0 || target < 0 || target >= _argsList.Items.Count) return;
+        if (index < 0 || target < 0 || target >= _arguments.Count) return;
 
-        var value = _argsList.Items[index];
-        _argsList.Items.RemoveAt(index);
-        _argsList.Items.Insert(target, value);
-        _argsList.SelectedIndex = target;
+        var value = _arguments[index];
+        _arguments.RemoveAt(index);
+        _arguments.Insert(target, value);
+        RefreshArguments(target);
         _argsList.Focus();
+    }
+
+    private void RefreshArguments(int selectedIndex = -1)
+    {
+        _argsList.DataStore = _arguments.ToList();
+        _argsList.SelectedIndex =
+            selectedIndex >= 0 && selectedIndex < _arguments.Count ? selectedIndex : -1;
+        UpdateArgumentButtons();
     }
 
     private void UpdateArgumentButtons()
@@ -483,35 +405,27 @@ public sealed class McpServerDialog : Form
         _argEditButton.Enabled = selected;
         _argDeleteButton.Enabled = selected;
         _argUpButton.Enabled = selected && index > 0;
-        _argDownButton.Enabled = selected && index < _argsList.Items.Count - 1;
+        _argDownButton.Enabled = selected && index < _arguments.Count - 1;
     }
 
     private Control BuildHeadersEditor()
     {
-        _headersList.Name = "McpHeadersList";
-        _headersList.Columns.Clear();
-        _headersList.Columns.Add(new ColumnHeader { Text = "键", Width = 170 });
-        _headersList.Columns.Add(new ColumnHeader { Text = "值", Width = 300 });
-
-        var layout = new TableLayoutPanel
+        _headersList.Columns.Add(new GridColumn
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var buttons = new FlowLayoutPanel
+            HeaderText = "键",
+            Width = 140,
+            DataCell = new TextBoxCell { Binding = Binding.Property<HeaderRow, string>(row => row.Key) },
+        });
+        _headersList.Columns.Add(new GridColumn
         {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            AutoSize = true,
-            Margin = new Padding(6, 0, 0, 0),
-        };
+            HeaderText = "值",
+            Width = 260,
+            Expand = true,
+            MinWidth = 200,
+            MaxWidth = 300,
+            DataCell = new TextBoxCell { Binding = Binding.Property<HeaderRow, string>(row => row.Value) },
+        });
+
         foreach (var button in new[]
         {
             _headerNewButton,
@@ -519,59 +433,58 @@ public sealed class McpServerDialog : Form
             _headerDeleteButton,
             _authTokenButton,
         })
-        {
             button.MinimumSize = new Size(92, 0);
-            buttons.Controls.Add(button);
-        }
 
         _headerNewButton.Click += (_, _) => AddHeader();
         _headerEditButton.Click += (_, _) => EditHeader();
         _headerDeleteButton.Click += (_, _) => DeleteHeader();
         _authTokenButton.Click += (_, _) => SetAuthToken();
-        _headersList.DoubleClick += (_, _) => EditHeader();
-        _headersList.SelectedIndexChanged += (_, _) => UpdateHeaderButtons();
+        _headersList.CellDoubleClick += (_, _) => EditHeader();
+        _headersList.SelectionChanged += (_, _) => UpdateHeaderButtons();
         _headersList.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Insert)
+            if (e.Key == Keys.Insert)
             {
                 AddHeader();
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.F2)
+            else if (e.Key == Keys.F2)
             {
                 EditHeader();
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.Delete)
+            else if (e.Key == Keys.Delete)
             {
                 DeleteHeader();
                 e.Handled = true;
             }
         };
 
-        layout.Controls.Add(_headersList, 0, 0);
-        layout.Controls.Add(buttons, 1, 0);
+        var layout = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        layout.Items.Add(new StackLayoutItem(_headersList, true));
+        layout.Items.Add(new StackLayoutItem(
+            Vertical(_headerNewButton, _headerEditButton, _headerDeleteButton, _authTokenButton),
+            false));
         UpdateHeaderButtons();
         return layout;
     }
 
     private void LoadHeaders(Dictionary<string, string> headers)
     {
-        _headersList.Items.Clear();
+        _headers.Clear();
         foreach (var pair in headers)
-        {
-            var item = new ListViewItem(pair.Key);
-            item.SubItems.Add(pair.Value);
-            _headersList.Items.Add(item);
-        }
-
-        UpdateHeaderButtons();
+            _headers.Add(new HeaderRow { Key = pair.Key, Value = pair.Value });
+        RefreshHeaders();
     }
 
     private void AddHeader()
     {
         using var dialog = new HeaderInputDialog("新建请求头", string.Empty, string.Empty);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!dialog.ShowModal(this)) return;
 
         if (FindHeaderIndex(dialog.HeaderKey) >= 0)
         {
@@ -579,22 +492,19 @@ public sealed class McpServerDialog : Form
             return;
         }
 
-        var item = new ListViewItem(dialog.HeaderKey);
-        item.SubItems.Add(dialog.HeaderValue);
-        var index = _headersList.Items.Add(item).Index;
-        SelectHeader(index);
+        _headers.Add(new HeaderRow { Key = dialog.HeaderKey, Value = dialog.HeaderValue });
+        RefreshHeaders(_headers.Count - 1);
         _errorLabel.Text = string.Empty;
     }
 
     private void EditHeader()
     {
-        if (_headersList.SelectedIndices.Count == 0) return;
-        var index = _headersList.SelectedIndices[0];
-        var item = _headersList.Items[index];
-        var value = item.SubItems.Count > 1 ? item.SubItems[1].Text : string.Empty;
+        var index = _headersList.SelectedRow;
+        if (index < 0 || index >= _headers.Count) return;
+        var item = _headers[index];
 
-        using var dialog = new HeaderInputDialog("编辑请求头", item.Text, value);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        using var dialog = new HeaderInputDialog("编辑请求头", item.Key, item.Value);
+        if (!dialog.ShowModal(this)) return;
 
         var duplicate = FindHeaderIndex(dialog.HeaderKey, index);
         if (duplicate >= 0)
@@ -603,27 +513,19 @@ public sealed class McpServerDialog : Form
             return;
         }
 
-        item.Text = dialog.HeaderKey;
-        if (item.SubItems.Count > 1)
-            item.SubItems[1].Text = dialog.HeaderValue;
-        else
-            item.SubItems.Add(dialog.HeaderValue);
-
-        SelectHeader(index);
+        item.Key = dialog.HeaderKey;
+        item.Value = dialog.HeaderValue;
+        RefreshHeaders(index);
         _errorLabel.Text = string.Empty;
     }
 
     private void DeleteHeader()
     {
-        if (_headersList.SelectedIndices.Count == 0) return;
-        var index = _headersList.SelectedIndices[0];
-        _headersList.Items.RemoveAt(index);
+        var index = _headersList.SelectedRow;
+        if (index < 0 || index >= _headers.Count) return;
 
-        if (_headersList.Items.Count > 0)
-            SelectHeader(Math.Min(index, _headersList.Items.Count - 1));
-        else
-            UpdateHeaderButtons();
-
+        _headers.RemoveAt(index);
+        RefreshHeaders(_headers.Count == 0 ? -1 : Math.Min(index, _headers.Count - 1));
         _headersList.Focus();
     }
 
@@ -633,14 +535,13 @@ public sealed class McpServerDialog : Form
         var initial = string.Empty;
         if (index >= 0)
         {
-            var item = _headersList.Items[index];
-            var current = item.SubItems.Count > 1 ? item.SubItems[1].Text.Trim() : string.Empty;
+            var current = _headers[index].Value.Trim();
             if (current.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 initial = current.Substring("Bearer ".Length).Trim();
         }
 
         using var dialog = new TextInputDialog("设置 Auth Token", "Token", initial);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!dialog.ShowModal(this)) return;
 
         var token = dialog.Value.Trim();
         if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
@@ -654,56 +555,42 @@ public sealed class McpServerDialog : Form
 
         var value = "Bearer " + token;
         if (index >= 0)
-        {
-            var item = _headersList.Items[index];
-            if (item.SubItems.Count > 1)
-                item.SubItems[1].Text = value;
-            else
-                item.SubItems.Add(value);
-        }
+            _headers[index].Value = value;
         else
         {
-            var item = new ListViewItem("Authorization");
-            item.SubItems.Add(value);
-            index = _headersList.Items.Add(item).Index;
+            _headers.Add(new HeaderRow { Key = "Authorization", Value = value });
+            index = _headers.Count - 1;
         }
 
-        SelectHeader(index);
+        RefreshHeaders(index);
         _errorLabel.Text = string.Empty;
     }
 
     private int FindHeaderIndex(string key, int exceptIndex = -1)
     {
-        for (var index = 0; index < _headersList.Items.Count; index++)
+        for (var index = 0; index < _headers.Count; index++)
         {
             if (index == exceptIndex) continue;
-            if (string.Equals(_headersList.Items[index].Text, key, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(_headers[index].Key, key, StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 
         return -1;
     }
 
-    private void SelectHeader(int index)
+    private void RefreshHeaders(int selectedIndex = -1)
     {
-        _headersList.SelectedIndices.Clear();
-        if (index < 0 || index >= _headersList.Items.Count)
-        {
-            UpdateHeaderButtons();
-            return;
-        }
-
-        var item = _headersList.Items[index];
-        item.Selected = true;
-        item.Focused = true;
-        item.EnsureVisible();
-        _headersList.Focus();
+        _headersList.DataStore = _headers.ToList();
+        _headersList.SelectedRow =
+            selectedIndex >= 0 && selectedIndex < _headers.Count ? selectedIndex : -1;
+        if (selectedIndex >= 0 && selectedIndex < _headers.Count)
+            _headersList.ScrollToRow(selectedIndex);
         UpdateHeaderButtons();
     }
 
     private void UpdateHeaderButtons()
     {
-        var selected = _headersList.SelectedIndices.Count > 0;
+        var selected = _headersList.SelectedRow >= 0;
         _headerEditButton.Enabled = selected;
         _headerDeleteButton.Enabled = selected;
     }
@@ -716,9 +603,9 @@ public sealed class McpServerDialog : Form
         error = string.Empty;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (ListViewItem item in _headersList.Items)
+        foreach (var item in _headers)
         {
-            var key = item.Text.Trim();
+            var key = item.Key.Trim();
             if (key.Length == 0)
             {
                 error = "请求头的键不能为空。";
@@ -731,93 +618,87 @@ public sealed class McpServerDialog : Form
                 return false;
             }
 
-            var value = item.SubItems.Count > 1 ? item.SubItems[1].Text : string.Empty;
-            headers[key] = value;
+            headers[key] = item.Value;
         }
 
         return true;
     }
 
-    private TableLayoutPanel BuildHttpPanel()
+    private DynamicLayout BuildHttpPanel()
     {
-        var table = NewFieldTable();
+        var table = NewFieldLayout();
         AddField(table, "URL", _urlBox);
         AddField(table, "请求头", BuildHeadersEditor(), grow: true);
         AddField(table, "代理", _proxyBox);
         return table;
     }
 
-    private static TableLayoutPanel NewFieldTable()
+    private static DynamicLayout NewFieldLayout() => new()
     {
-        var table = new TableLayoutPanel
+        Padding = new Padding(4),
+        Spacing = new Size(8, 8),
+    };
+
+    private static void AddField(DynamicLayout table, string label, Control control, bool grow = false)
+    {
+        var row = new StackLayout
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalContentAlignment = grow ? VerticalAlignment.Top : VerticalAlignment.Center,
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        return table;
-    }
-
-    /// <summary>
-    /// Adds one label/field row. Single-line fields get an auto-sized row so the
-    /// label and the field stay vertically aligned; only multiline editors grow
-    /// to share the remaining height.
-    /// </summary>
-    private static void AddField(TableLayoutPanel table, string label, Control control, bool grow = false)
-    {
-        var row = table.RowCount;
-        table.RowCount = row + 1;
-        table.RowStyles.Add(grow
-            ? new RowStyle(SizeType.Percent, 100)
-            : new RowStyle(SizeType.AutoSize));
-
-        table.Controls.Add(new Label
-        {
-            Text = label,
-            AutoSize = true,
-            Anchor = grow
-                ? AnchorStyles.Top | AnchorStyles.Left
-                : AnchorStyles.Left,
-            Margin = new Padding(3, grow ? 8 : 9, 8, 3),
-        }, 0, row);
-
-        control.Margin = new Padding(3, 4, 3, 4);
-        if (grow)
-        {
-            control.Dock = DockStyle.Fill;
-        }
-        else if (control is TextBox { Multiline: false } single)
-        {
-            // Stretch horizontally but keep the natural height of a single line.
-            single.Dock = DockStyle.None;
-            single.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        }
-
-        table.Controls.Add(control, 1, row);
+        row.Items.Add(new StackLayoutItem(FieldLabel(label), false));
+        row.Items.Add(new StackLayoutItem(control, true));
+        table.AddRow(row);
     }
 
     private static Label FieldLabel(string text) => new()
     {
         Text = text,
-        AutoSize = true,
-        Anchor = AnchorStyles.Left,
-        Margin = new Padding(3, 8, 8, 3),
+        Width = 88,
+        VerticalAlignment = VerticalAlignment.Center,
     };
+
+    private static StackLayout Horizontal(params Control[] controls)
+    {
+        var layout = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        foreach (var control in controls)
+            layout.Items.Add(new StackLayoutItem(control, false));
+        return layout;
+    }
+
+    private static StackLayout Vertical(params Control[] controls)
+    {
+        var layout = new StackLayout
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 6,
+        };
+        foreach (var control in controls)
+            layout.Items.Add(new StackLayoutItem(control, false));
+        return layout;
+    }
+
+    private static string DirectoryOrHome(string? path)
+    {
+        var value = path ?? string.Empty;
+        if (System.IO.Directory.Exists(value)) return value;
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
 
     private static string FormatPairs(Dictionary<string, string> pairs, string separator)
     {
         var builder = new StringBuilder();
-        // KeyValuePair deconstruction does not exist on .NET Framework 4.8.
         foreach (var pair in pairs)
             builder.AppendLine(pair.Key + separator + pair.Value);
         return builder.ToString();
     }
 
-    /// <summary>
-    /// Parses KEY=value environment-variable lines. Splitting on the first
-    /// separator keeps values containing '=' intact.
-    /// </summary>
     private static bool TryParsePairs(
         string text,
         char separator,
@@ -858,5 +739,11 @@ public sealed class McpServerDialog : Form
     {
         var trimmed = value.Trim();
         return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private sealed class HeaderRow
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
     }
 }

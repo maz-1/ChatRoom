@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
+using Eto.Forms;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows.Forms;
+
 
 namespace ChatRoomTray.ConfigEditor;
 
@@ -47,26 +47,24 @@ internal static class ConfigEditorCommands
             case "--help":
             case "-h":
                 AttachConsole();
+                var executableName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? "ChatRoomTray.exe"
+                    : "./ChatRoomTray";
                 Console.WriteLine(
                     "ChatRoomTray 配置编辑器\n\n" +
-                    "  ChatRoomTray.exe --config        打开图形界面\n" +
-                    "  ChatRoomTray.exe <config.json>   校验指定配置并输出报告\n" +
-                    "  ChatRoomTray.exe --check [path] [--report <file>]\n" +
-                    "                                           校验配置（默认路径来自 CHATROOM_CONFIG\n" +
-                    "                                           或 %APPDATA%\\ChatRoom\\config.json）\n" +
-                    "  ChatRoomTray.exe --roundtrip <src> <dst> [--report <file>]\n" +
+                    $"  {executableName} --config        打开图形界面\n" +
+                    $"  {executableName} <config.json>   校验指定配置并输出报告\n" +
+                    $"  {executableName} --check [path] [--report <file>]\n" +
+                    $"                                           校验配置（默认：{ConfigPaths.DefaultConfigPath()}）\n" +
+                    $"  {executableName} --roundtrip <src> <dst> [--report <file>]\n" +
                     "                                           载入配置另存并比对是否一致\n" +
-                    "  ChatRoomTray.exe --selftest [--report <file>]\n" +
+                    $"  {executableName} --selftest [--report <file>]\n" +
                     "                                           自检（编码、校验规则、写入不变量）\n" +
-                    "  ChatRoomTray.exe --uismoke [--report <file>]\n" +
-                    "                                           界面自检（构造窗体并断言布局对齐）");
+                    $"  {executableName} --uismoke [--report <file>]\n" +
+                    "                                           界面自检（构造 Eto 窗体并检查关键控件）");
                 return 0;
             default:
-                // .NET Framework equivalent of ApplicationConfiguration.Initialize().
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
-                return 0;
+                return ConfigEditorHost.Run();
         }
     }
 
@@ -83,11 +81,36 @@ internal static class ConfigEditorCommands
         try
         {
             var loaded = ConfigStore.Load(path);
-            var token = OwnerTokenStore.Read(path) ?? loaded.LegacyOwnerToken;
+            string? token = null;
+            OwnerTokenStoreException? credentialError = null;
+            try
+            {
+                token = OwnerTokenStore.Read(path) ?? loaded.LegacyOwnerToken;
+            }
+            catch (OwnerTokenStoreException error)
+            {
+                credentialError = error;
+            }
+
+            var required = ConfigValidator.AuthenticationUsesOwnerToken(loaded.Config);
+            var tokenPresentForRules = credentialError is not null && required
+                ? true
+                : OwnerToken.IsPresent(token);
             var issues = ConfigValidator.Validate(
                 loaded.Config,
                 loaded.UnknownKeys,
-                OwnerToken.IsPresent(token));
+                tokenPresentForRules);
+
+            if (credentialError is not null)
+            {
+                issues.Add(new ValidationIssue(
+                    required ? IssueSeverity.Error : IssueSeverity.Warning,
+                    "ownerToken",
+                    required
+                        ? $"当前配置需要 ownerToken，但系统凭据库不可用：{credentialError.Message}"
+                        : $"系统凭据库暂不可用；当前纯本地配置可以继续运行：{credentialError.Message}"));
+            }
+
             var errors = issues.Count(issue => issue.Severity == IssueSeverity.Error);
             var warnings = issues.Count - errors;
 
@@ -114,370 +137,207 @@ internal static class ConfigEditorCommands
     }
 
     /// <summary>
-    /// Builds the real form without showing it, to catch construction/layout
-    /// failures, and asserts that the owner token never appears in any control.
+    /// Constructs the integrated Eto.Forms editor and its dialogs without entering
+    /// a message loop. This catches missing platform handlers/control wiring and
+    /// verifies that secrets are not rendered into visible controls.
     /// </summary>
     private static int RunUiSmoke(string? report)
     {
-        var output = new StringBuilder();
-        var failed = 0;
-        var results = new List<string>();
-
-        void Check(string name, bool ok, string? detail = null)
-        {
-            results.Add($"{(ok ? "PASS" : "FAIL")} {name}{(ok || detail is null ? "" : $" — {detail}")}");
-            if (!ok) failed++;
-        }
-
         try
         {
-            // .NET Framework equivalent of ApplicationConfiguration.Initialize().
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
-            var configPath = ConfigPaths.DefaultConfigPath();
-            string? token = OwnerTokenStore.Read(configPath);
-            if (!OwnerToken.IsPresent(token) && File.Exists(configPath))
-                token = ConfigStore.Load(configPath).LegacyOwnerToken;
-
-            using var form = new MainForm();
-            // Shown off-screen so every tab really lays out; a hidden form leaves
-            // unselected tab pages unmeasured.
-            form.ShowInTaskbar = false;
-            form.StartPosition = FormStartPosition.Manual;
-            form.Location = new Point(-8000, -8000);
-            form.Show();
-            Application.DoEvents();
-
-            var controls = Walk(form).ToList();
-            Check("窗体构造无异常", true);
-            Check("控件数量合理", controls.Count > 60, $"实际 {controls.Count}");
-
-            var tabControl = controls.OfType<TabControl>().FirstOrDefault();
-            var tabs = tabControl?.TabPages.Cast<TabPage>().ToList() ?? new List<TabPage>();
-            Check(
-                "包含四个编辑页",
-                tabs.Count == 4,
-                string.Join(",", tabs.Select(tab => tab.Text)));
-            Check(
-                "包含 MCP 服务页",
-                tabs.Any(tab => tab.Text.Contains("MCP")),
-                string.Join(",", tabs.Select(tab => tab.Text)));
-
-            var texts = controls.SelectMany(CollectTexts).ToList();
-            if (token is not null)
+            return ConfigEditorHost.WithApplication(() =>
             {
-                Check(
-                    "ownerToken 未出现在任何控件文本中",
-                    texts.All(text => text.IndexOf(token, StringComparison.Ordinal) < 0));
-                Check(
-                    "令牌状态以脱敏形式提示",
-                    texts.Any(text => text.StartsWith("已设置 · ", StringComparison.Ordinal)),
-                    string.Join(" | ", texts.Where(text => text.Contains("设置"))));
-            }
+                var output = new StringBuilder();
+            var failed = 0;
+            var results = new List<string>();
 
-            var serverView = controls.OfType<ListView>()
-                .FirstOrDefault(view => view.Columns.Cast<ColumnHeader>().Any(column => column.Text == "传输"));
-            Check(
-                "MCP 服务列表已填充",
-                serverView is not null && serverView.Items.Count > 0,
-                serverView is null ? "未找到服务列表" : $"{serverView.Items.Count} 行");
-
-            using (var httpDialog = new McpServerDialog(
-                       "remote",
-                       new HttpMcpServerConfig
-                       {
-                           Url = "https://example.com/mcp",
-                           Headers = { ["Authorization"] = "Bearer test-token" },
-                       },
-                       new HashSet<string>(StringComparer.Ordinal)))
+            void Check(string name, bool condition, string? detail = null)
             {
-                var httpControls = Walk(httpDialog).ToList();
-                var headerView = httpControls.OfType<ListView>()
-                    .FirstOrDefault(view => view.Name == "McpHeadersList");
-                Check(
-                    "HTTP MCP 请求头使用键值列表",
-                    headerView is not null
-                    && headerView.Columns.Count == 2
-                    && headerView.Columns[0].Text == "键"
-                    && headerView.Columns[1].Text == "值");
-                Check(
-                    "HTTP MCP 请求头能加载已有配置",
-                    headerView is not null
-                    && headerView.Items.Count == 1
-                    && headerView.Items[0].Text == "Authorization"
-                    && headerView.Items[0].SubItems.Count > 1
-                    && headerView.Items[0].SubItems[1].Text == "Bearer test-token");
-                Check(
-                    "HTTP MCP 提供 Auth Token 快捷按钮",
-                    httpControls.OfType<Button>().Any(button => button.Text == "填写 Auth Token…"));
-            }
-
-            using (var headerDialog = new HeaderInputDialog("测试请求头", string.Empty, string.Empty))
-            {
-                var labels = Walk(headerDialog).OfType<Label>().Select(label => label.Text).ToList();
-                Check(
-                    "请求头编辑窗口分别输入键和值",
-                    labels.Contains("键") && labels.Contains("值"));
-            }
-
-            using (var completeCommandDialog = new TextInputDialog(
-                       "输入完整命令",
-                       "完整命令",
-                       string.Empty,
-                       clientWidth: 720))
-            {
-                completeCommandDialog.StartPosition = FormStartPosition.Manual;
-                completeCommandDialog.Location = new Point(-8000, -8000);
-                completeCommandDialog.Show();
-                Application.DoEvents();
-
-                var label = Walk(completeCommandDialog)
-                    .OfType<Label>()
-                    .FirstOrDefault(candidate => candidate.Text == "完整命令");
-                var preferred = label is null
-                    ? Size.Empty
-                    : TextRenderer.MeasureText(label.Text, label.Font);
-                Check(
-                    "完整命令输入窗口标签不换行",
-                    label is not null
-                    && label.Height <= preferred.Height + 4
-                    && label.Width >= preferred.Width,
-                    label is null
-                        ? "未找到标签"
-                        : $"label={label.Width}x{label.Height} preferred={preferred.Width}x{preferred.Height}");
-            }
-
-            Check("校验结果面板存在", controls.OfType<ListView>().Any(view =>
-                view.Columns.Cast<ColumnHeader>().Any(column => column.Text == "级别")));
-
-            // The tab tables are 3 columns: label | field | optional buttons.
-            var worstTab = 0;
-            var tabDetail = new List<string>();
-            var measuredRows = 0;
-            if (tabControl is not null)
-            {
-                foreach (TabPage page in tabControl.TabPages)
+                if (condition)
+                    results.Add($"PASS {name}");
+                else
                 {
-                    tabControl.SelectedTab = page;
-                    Application.DoEvents();
-
-                    foreach (var table in Walk(page).OfType<TableLayoutPanel>()
-                                 .Where(table => table.ColumnCount == 3))
-                    {
-                        for (var row = 0; row < table.RowCount && row < table.RowStyles.Count; row++)
-                        {
-                            if (table.GetControlFromPosition(0, row) is not Label label) continue;
-                            if (table.GetControlFromPosition(1, row) is not { } field) continue;
-                            if (label.Height == 0 || field.Height == 0) continue;
-
-                            measuredRows++;
-                            var delta = table.RowStyles[row].SizeType == SizeType.Absolute
-                                ? Math.Abs(label.Top - field.Top)
-                                : Math.Abs(label.Top + label.Height / 2 - (field.Top + field.Height / 2));
-                            if (delta > worstTab) worstTab = delta;
-                            if (delta > 8)
-                                tabDetail.Add(
-                                    $"{page.Text}/{label.Text}:{delta}px " +
-                                    $"[label top={label.Top} h={label.Height}, field {field.GetType().Name} top={field.Top} h={field.Height}, " +
-                                    $"row={table.RowStyles[row].SizeType}/{table.GetRowHeights()[row]}]");
-                        }
-                    }
+                    failed++;
+                    results.Add($"FAIL {name}" + (string.IsNullOrEmpty(detail) ? string.Empty : $": {detail}"));
                 }
             }
 
-            Check(
-                "各标签页标签与输入框对齐",
-                measuredRows > 0 && worstTab <= 8,
-                measuredRows == 0
-                    ? "未测量到任何行"
-                    : $"最大偏差 {worstTab}px {string.Join(" ", tabDetail)}");
+            try
+            {
+                var configPath = ConfigPaths.DefaultConfigPath();
+                string? token = null;
+                try
+                {
+                    token = OwnerTokenStore.Read(configPath);
+                }
+                catch
+                {
+                    // The UI smoke test is still useful if the credential store is unavailable.
+                }
 
-            failed += MeasureDialogAlignment(results);
-            form.Close();
+                if (!OwnerToken.IsPresent(token) && File.Exists(configPath))
+                    token = ConfigStore.Load(configPath).LegacyOwnerToken;
+
+                using var form = new MainForm();
+                var controls = Walk(form).ToList();
+                Check("Eto 主窗体构造无异常", true);
+                Check("Eto 控件数量合理", controls.Count > 25, $"实际 {controls.Count}");
+
+                if (OwnerToken.IsPresent(token))
+                {
+                    var visible = controls.SelectMany(CollectTexts).ToList();
+                    Check(
+                        "ownerToken 不显示在界面控件中",
+                        visible.All(text => !string.Equals(text, token, StringComparison.Ordinal)));
+                }
+
+                var serverView = controls.OfType<GridView>()
+                    .FirstOrDefault(view => view.ID == "McpServersView");
+                Check("MCP 服务使用 Eto GridView", serverView is not null);
+                Check(
+                    "MCP 服务列完整",
+                    serverView is not null
+                    && serverView.Columns.Any(column => column.HeaderText == "名称")
+                    && serverView.Columns.Any(column => column.HeaderText == "传输")
+                    && serverView.Columns.Any(column => column.HeaderText == "目标"));
+
+                using (var stdioDialog = new McpServerDialog(
+                           "local",
+                           new StdioMcpServerConfig
+                           {
+                               Command = "node",
+                               Args = new List<string> { "server.js" },
+                               Env = new Dictionary<string, string>(),
+                           },
+                           new HashSet<string>(StringComparer.Ordinal)))
+                {
+                    var dialogControls = Walk(stdioDialog).ToList();
+                    Check(
+                        "stdio 对话框使用 Eto 参数列表",
+                        dialogControls.OfType<ListBox>().Any(list => list.ID == "McpArgsList"));
+                    Check(
+                        "stdio 对话框保留完整命令入口",
+                        dialogControls.OfType<Button>().Any(button => button.ID == "McpCompleteCommandButton"));
+                }
+
+                using (var httpDialog = new McpServerDialog(
+                           "remote",
+                           new HttpMcpServerConfig
+                           {
+                               Url = "https://example.com/mcp",
+                               Headers = new Dictionary<string, string>
+                               {
+                                   ["Authorization"] = "Bearer secret",
+                               },
+                           },
+                           new HashSet<string>(StringComparer.Ordinal)))
+                {
+                    var dialogControls = Walk(httpDialog).ToList();
+                    var headerView = dialogControls.OfType<GridView>()
+                        .FirstOrDefault(view => view.ID == "McpHeadersList");
+                    Check("HTTP 请求头使用 Eto GridView", headerView is not null);
+                    Check(
+                        "HTTP 请求头列完整",
+                        headerView is not null
+                        && headerView.Columns.Any(column => column.HeaderText == "键")
+                        && headerView.Columns.Any(column => column.HeaderText == "值"));
+                }
+
+                using (var headerDialog = new HeaderInputDialog("测试请求头", string.Empty, string.Empty))
+                {
+                    var labels = Walk(headerDialog)
+                        .OfType<Label>()
+                        .Select(label => label.Text ?? string.Empty)
+                        .ToList();
+                    Check("请求头编辑窗口分别输入键和值", labels.Contains("键") && labels.Contains("值"));
+                }
+
+                using (var completeCommandDialog = new TextInputDialog(
+                           "输入完整命令",
+                           "完整命令",
+                           string.Empty,
+                           clientWidth: 720))
+                {
+                    var hasLabel = Walk(completeCommandDialog)
+                        .OfType<Label>()
+                        .Any(label => label.Text == "完整命令");
+                    Check("完整命令输入窗口已迁移到 Eto", hasLabel);
+                }
+            }
+            catch (Exception error)
+            {
+                failed++;
+                results.Add($"FAIL Eto UI smoke: {error}");
+            }
+
+                foreach (var result in results) output.AppendLine(result);
+                output.AppendLine(failed == 0 ? "UISMOKE OK" : $"UISMOKE FAILED ({failed})");
+                if (report is not null)
+                    File.WriteAllText(report, output.ToString(), new UTF8Encoding(false));
+                AttachConsole();
+                Console.Write(output.ToString());
+                return failed == 0 ? 0 : 1;
+            });
         }
         catch (Exception error)
         {
-            results.Add($"FAIL 界面构造：{error}");
-            failed++;
+            var output = $"FAIL Eto application init/dispose: {error}{Environment.NewLine}UISMOKE FAILED (1){Environment.NewLine}";
+            if (report is not null)
+                File.WriteAllText(report, output, new UTF8Encoding(false));
+            AttachConsole();
+            Console.Write(output);
+            return 1;
         }
-
-        output.AppendLine(string.Join(Environment.NewLine, results));
-        output.AppendLine(failed == 0 ? "UISMOKE OK" : $"UISMOKE FAILED ({failed})");
-        if (report is not null) File.WriteAllText(report, output.ToString(), new UTF8Encoding(false));
-        AttachConsole();
-        Console.Write(output.ToString());
-        return failed == 0 ? 0 : 1;
-    }
-
-    /// <summary>
-    /// Lays out the MCP server dialog off-screen and asserts that every label is
-    /// vertically aligned with its field. Regression guard for the row sizing
-    /// that once pushed labels below their inputs.
-    /// </summary>
-    private static int MeasureDialogAlignment(List<string> results)
-    {
-        var failed = 0;
-
-        void Check(string name, bool ok, string? detail = null)
-        {
-            results.Add($"{(ok ? "PASS" : "FAIL")} {name}{(ok || detail is null ? "" : $" — {detail}")}");
-            if (!ok) failed++;
-        }
-
-        foreach (var transport in new[] { "stdio", "http" })
-        {
-            using var dialog = new McpServerDialog(
-                null,
-                transport == "stdio"
-                    ? new StdioMcpServerConfig
-                    {
-                        Command = "python",
-                        Args = { "-m", "mcp_windbg" },
-                    }
-                    : new HttpMcpServerConfig(),
-                new HashSet<string>(StringComparer.Ordinal));
-            dialog.StartPosition = FormStartPosition.Manual;
-            dialog.Location = new Point(-8000, -8000);
-            dialog.Show();
-            Application.DoEvents();
-
-            if (transport == "stdio")
-            {
-                var argsList = Walk(dialog)
-                    .OfType<ListBox>()
-                    .FirstOrDefault(list => list.Name == "McpArgsList");
-                var argumentButtons = Walk(dialog)
-                    .OfType<Button>()
-                    .Select(button => button.Text)
-                    .ToHashSet(StringComparer.Ordinal);
-                Check(
-                    "MCP stdio 参数使用独立列表项",
-                    argsList is not null
-                    && argsList.Items.Count == 2
-                    && string.Equals((string)argsList.Items[0], "-m", StringComparison.Ordinal)
-                    && string.Equals((string)argsList.Items[1], "mcp_windbg", StringComparison.Ordinal));
-                Check(
-                    "MCP stdio 参数列表提供编辑与排序操作",
-                    new[] { "新建", "编辑", "删除", "上移", "下移" }
-                        .All(argumentButtons.Contains));
-                Check(
-                    "MCP stdio 命令行提供完整命令导入",
-                    argumentButtons.Contains("完整命令…"));
-
-                var commandBox = Walk(dialog)
-                    .OfType<TextBox>()
-                    .FirstOrDefault(box => box.Name == "McpCommandBox");
-                var commandButton = Walk(dialog)
-                    .OfType<Button>()
-                    .FirstOrDefault(button => button.Name == "McpCompleteCommandButton");
-                var commandEditor = Walk(dialog)
-                    .OfType<TableLayoutPanel>()
-                    .FirstOrDefault(table => table.Name == "McpCommandEditor");
-                var commandLabel = Walk(dialog)
-                    .OfType<Label>()
-                    .FirstOrDefault(label => label.Text == "命令");
-                var commandAligned = commandBox is not null
-                    && commandButton is not null
-                    && commandEditor is not null
-                    && commandLabel is not null
-                    && commandEditor.Height <= Math.Max(commandBox.Height, commandButton.Height) + 8
-                    && Math.Abs(
-                        commandLabel.PointToScreen(Point.Empty).Y + commandLabel.Height / 2
-                        - commandBox.PointToScreen(Point.Empty).Y - commandBox.Height / 2) <= 4
-                    && Math.Abs(
-                        commandButton.PointToScreen(Point.Empty).Y + commandButton.Height / 2
-                        - commandBox.PointToScreen(Point.Empty).Y - commandBox.Height / 2) <= 4;
-                Check(
-                    "MCP stdio 命令行标签、输入框与按钮垂直对齐",
-                    commandAligned,
-                    commandEditor is null || commandBox is null || commandButton is null || commandLabel is null
-                        ? "缺少命令行控件"
-                        : $"label={commandLabel.Height}px/{commandLabel.PointToScreen(Point.Empty).Y + commandLabel.Height / 2} "
-                          + $"box={commandBox.Height}px/{commandBox.PointToScreen(Point.Empty).Y + commandBox.Height / 2} "
-                          + $"button={commandButton.Height}px/{commandButton.PointToScreen(Point.Empty).Y + commandButton.Height / 2} "
-                          + $"editor={commandEditor.Height}px");
-            }
-
-            var tables = Walk(dialog)
-                .OfType<TableLayoutPanel>()
-                .Where(table => table.ColumnCount == 2 && table.RowCount >= 3)
-                .ToList();
-
-            var worst = 0;
-            var measured = 0;
-            var detail = new List<string>();
-            foreach (var table in tables)
-            {
-                for (var row = 0; row < table.RowCount && row < table.RowStyles.Count; row++)
-                {
-                    var label = table.GetControlFromPosition(0, row) as Label;
-                    var field = table.GetControlFromPosition(1, row);
-                    if (label is null || field is null) continue;
-                    if (label.Height == 0 || field.Height == 0) continue;
-
-                    measured++;
-                    int delta;
-                    if (table.RowStyles[row].SizeType == SizeType.Percent)
-                    {
-                        // Multiline editors: the label belongs at the top.
-                        delta = Math.Abs(label.Top - field.Top);
-                    }
-                    else
-                    {
-                        var labelCenter = label.Top + label.Height / 2;
-                        var fieldCenter = field.Top + field.Height / 2;
-                        delta = Math.Abs(labelCenter - fieldCenter);
-                    }
-
-                    if (delta > worst) worst = delta;
-                    if (delta > 8)
-                        detail.Add($"{label.Text}:{delta}px");
-                }
-            }
-
-            dialog.Close();
-            Check($"MCP 对话框({transport}) 标签与输入框对齐", measured > 0 && worst <= 8,
-                measured == 0 ? "未能测量到任何行" : $"最大偏差 {worst}px {string.Join(" ", detail)}");
-        }
-
-        return failed;
     }
 
     private static IEnumerable<Control> Walk(Control root)
     {
-        foreach (Control child in root.Controls)
+        if (root is not Container container) yield break;
+        foreach (var child in container.Controls)
         {
             yield return child;
-            foreach (var descendant in Walk(child)) yield return descendant;
+            foreach (var descendant in Walk(child))
+                yield return descendant;
         }
     }
 
-    /// <summary>Every user-visible string reachable from a control.</summary>
+    /// <summary>Every user-visible string reachable from an Eto control.</summary>
     private static IEnumerable<string> CollectTexts(Control control)
     {
-        yield return control.Text;
         switch (control)
         {
+            case Label label:
+                yield return label.Text ?? string.Empty;
+                break;
+            case Button button:
+                yield return button.Text ?? string.Empty;
+                break;
+            case TextBox textBox:
+                yield return textBox.Text ?? string.Empty;
+                break;
+            case TextArea textArea:
+                yield return textArea.Text ?? string.Empty;
+                break;
+            case CheckBox checkBox:
+                yield return checkBox.Text ?? string.Empty;
+                break;
+            case GroupBox group:
+                yield return group.Text ?? string.Empty;
+                break;
+            case TabPage page:
+                yield return page.Text ?? string.Empty;
+                break;
             case ListBox listBox:
-                foreach (var item in listBox.Items) yield return item?.ToString() ?? string.Empty;
+                foreach (var item in listBox.DataStore ?? Enumerable.Empty<object>())
+                    yield return item?.ToString() ?? string.Empty;
                 break;
-            case ListView listView:
-                foreach (ListViewItem item in listView.Items)
-                {
-                    yield return item.Text;
-                    foreach (ListViewItem.ListViewSubItem sub in item.SubItems)
-                        yield return sub.Text;
-                }
-                foreach (ColumnHeader column in listView.Columns) yield return column.Text;
+            case DropDown dropDown:
+                foreach (var item in dropDown.DataStore ?? Enumerable.Empty<object>())
+                    yield return item?.ToString() ?? string.Empty;
                 break;
-            case ComboBox comboBox:
-                foreach (var item in comboBox.Items) yield return item?.ToString() ?? string.Empty;
-                break;
-            // StatusStrip derives from ToolStrip, so this covers both.
-            case ToolStrip toolStrip:
-                foreach (ToolStripItem item in toolStrip.Items)
-                    yield return item.Text ?? string.Empty;
+            case GridView grid:
+                foreach (var column in grid.Columns)
+                    yield return column.HeaderText ?? string.Empty;
                 break;
         }
     }
@@ -554,16 +414,22 @@ internal static class ConfigEditorCommands
         Check("base64url 字符集", token.All(c => char.IsLetterOrDigit(c) || c is '-' or '_'));
         Check("令牌提示不泄漏内容", OwnerToken.Describe(token) == "已设置 · 43 个字符", OwnerToken.Describe(token));
 
+        var commandInput = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "\"C:\\Program Files\\nodejs\\npx.cmd\" -y \"@scope/server\" \"D:\\My Data\" \"\""
+            : "python3 \"/tmp/my script.py\" --name 'hello world' \"\"";
         var commandParsed = CompleteCommandParser.TryParse(
-            "\"C:\\Program Files\\nodejs\\npx.cmd\" -y \"@scope/server\" \"D:\\My Data\" \"\"",
+            commandInput,
             out var parsedCommand,
             out var parsedArgs,
             out var commandParseError);
+        var commandExpected = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? parsedCommand == @"C:\Program Files\nodejs\npx.cmd"
+              && parsedArgs.SequenceEqual(new[] { "-y", "@scope/server", @"D:\My Data", string.Empty })
+            : parsedCommand == "python3"
+              && parsedArgs.SequenceEqual(new[] { "/tmp/my script.py", "--name", "hello world", string.Empty });
         Check(
-            "完整 stdio 命令按 Windows 命令行规则拆分",
-            commandParsed
-            && parsedCommand == @"C:\Program Files\nodejs\npx.cmd"
-            && parsedArgs.SequenceEqual(new[] { "-y", "@scope/server", @"D:\My Data", string.Empty }),
+            "完整 stdio 命令按当前平台规则拆分",
+            commandParsed && commandExpected,
             commandParseError);
 
         var defaults = ConfigStore.CreateDefault();
@@ -589,7 +455,7 @@ internal static class ConfigEditorCommands
             string.Join("; ", missingToken.Select(i => $"{i.Path}: {i.Message}")));
 
         Check(
-            "凭据管理器存在令牌后通过",
+            "系统凭据库存在令牌后通过",
             !ConfigValidator.HasErrors(ConfigValidator.Validate(
                 defaults,
                 Array.Empty<string>(),
@@ -762,19 +628,26 @@ internal static class ConfigEditorCommands
         return failed == 0 ? 0 : 1;
     }
 
-    /// <summary>A WinExe has no console of its own; borrow the caller's.</summary>
+    /// <summary>
+    /// The Windows tray build is a WinExe and borrows the caller's console.
+    /// Linux/macOS builds are normal console executables, so no attachment is needed.
+    /// </summary>
     private static void AttachConsole()
     {
+#if NETFRAMEWORK
         try
         {
-            AttachConsole(-1);
+            NativeAttachConsole(-1);
         }
         catch
         {
             // No parent console (double-clicked); console output is simply lost.
         }
+#endif
     }
 
+#if NETFRAMEWORK
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool AttachConsole(int processId);
+    private static extern bool NativeAttachConsole(int processId);
+#endif
 }

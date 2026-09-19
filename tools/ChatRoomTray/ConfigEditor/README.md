@@ -1,14 +1,30 @@
 # ChatRoomTray 配置编辑器模块
 
-该目录包含 `ChatRoomTray` 内置的 ChatRoom `config.json` 配置编辑器（C# / WinForms / **.NET Framework 4.8**）。
-它不是独立工程，也不生成单独的 EXE；ChatRoom 的 WebUI 对 MCP 服务只做只读展示，增删改由此模块承担。
+该目录包含 `ChatRoomTray` 内置的 ChatRoom `config.json` 配置编辑器。配置编辑器没有拆成独立工程：Windows 下继续与托盘程序编译到同一个 `ChatRoomTray.exe`；Linux/macOS 使用同一个 `ChatRoomTray.csproj` 构建配置编辑器和配置 CLI，只排除 Windows 专用托盘源码。
 
-## 运行要求
+## 平台结构
 
-- Windows（.NET Framework 4.8 随 Windows 10/11 内置，通常无需额外安装）
-- 构建需要 .NET SDK（含 v4.8 目标包）或 Visual Studio 2022
+| 平台 | 目标框架 | Eto 后端 | 托盘 |
+| --- | --- | --- | --- |
+| Windows | .NET Framework 4.8 | Eto WinForms | 保留现有 WinForms Tray |
+| Linux | .NET 10 | Eto GTK | 不编译托盘 |
+| macOS | .NET 10 | Eto Mac64 | 不编译托盘 |
+
+跨平台目标只排除 `StartupArgsDialog.cs`、`TrayApplicationContext.cs`、`TraySettings.cs`；`ConfigEditor` 源码、配置模型、校验、MCP 服务编辑和 ownerToken 管理均为同一份代码。
+
+## 默认路径
+
+| 平台 | config.json | Data | State |
+| --- | --- | --- | --- |
+| Windows | `%APPDATA%\ChatRoom\config.json` | `%LOCALAPPDATA%\ChatRoom\Data` | `%LOCALAPPDATA%\ChatRoom\State` |
+| macOS | `~/Library/Application Support/ChatRoom/config.json` | `~/Library/Application Support/ChatRoom/Data` | `~/Library/Application Support/ChatRoom/State` |
+| Linux | `$XDG_CONFIG_HOME/chatroom/config.json` 或 `~/.config/chatroom/config.json` | `$XDG_DATA_HOME/chatroom` 或 `~/.local/share/chatroom` | `$XDG_STATE_HOME/chatroom` 或 `~/.local/state/chatroom` |
+
+三个平台都优先使用 `CHATROOM_CONFIG`。Linux 只接受绝对的 XDG 路径，与 `src/config/platform-paths.ts` 保持一致。
 
 ## 构建与运行
+
+Windows 默认仍构建完整托盘版本：
 
 ```powershell
 cd tools/ChatRoomTray
@@ -16,15 +32,26 @@ dotnet build
 bin\Debug\net48\ChatRoomTray.exe --config
 ```
 
-产物：`bin/Debug/net48/ChatRoomTray.exe`。配置编辑器源码由 `ChatRoomTray.csproj` 直接编译；构建过程通过 ILRepack 将
-`Newtonsoft.Json.dll` 合并进 EXE，因此发布时无需携带独立的依赖 DLL。
+Linux 上同一个项目默认选择 `net10.0 + Eto GTK`：
+
+```bash
+cd tools/ChatRoomTray
+dotnet build
+./bin/Debug/net10.0/ChatRoomTray --config
+```
+
+macOS 使用 `net10.0 + Eto Mac64`，配置了 `osx-x64` 与 `osx-arm64` 两个 RID；`dotnet build` 会生成对应 `.app`。
+
+Linux GUI 需要 GTK3；认证功能还需要 `libsecret-1` 和 Secret Service（如 GNOME Keyring/KWallet）。Windows 构建继续使用 ILRepack 保持单 EXE。
 
 ## 依赖
 
-唯一的 NuGet 依赖是 **Newtonsoft.Json 13.0.3**。net48 上没有 `System.Text.Json` 的多态序列化支持
-（`[JsonPolymorphic]` / `[JsonDerivedType]` 属 .NET 7+），因此改用 Newtonsoft，并通过
-`McpServerConverter` 按 `type` 字段读写两种 MCP 传输方式——输出键顺序与 ChatRoom 自身写法一致。
-**ILRepack.Lib.MSBuild.Task** 仅在构建时使用，不会成为运行时依赖。
+- **Eto.Forms 2.11.0**：统一 UI API。
+- **Eto.Platform.Windows 2.11.0**：Windows backend。
+- **Eto.Platform.Gtk 2.11.0**：Linux backend。
+- **Eto.Platform.Mac64 2.11.0**：macOS backend。
+- **Newtonsoft.Json 13.0.3**：配置序列化与多态 MCP transport。
+- **ILRepack.Lib.MSBuild.Task**：仅 Windows net48 构建使用。
 
 ## 能编辑的内容
 
@@ -37,17 +64,19 @@ bin\Debug\net48\ChatRoomTray.exe --config
 | 限额 | `http.*`、`operations.maxPayloadBytes`、`process.*`、`mcp.callTimeoutMs`、`mcp.maxResultBytes` |
 | MCP 服务 | `mcp.servers` 的**增删改**：`stdio`（命令/参数/环境变量/工作目录）与 `http`（URL/请求头/代理） |
 
-`mcp.servers` 的条目支持两种传输方式，字段与 ChatRoom 的校验规则一一对应。
-`stdio` 的“参数”使用列表编辑器，每个列表项对应一个独立 argv 参数，可新建、编辑、删除和调整顺序；“命令”行右侧的“完整命令…”可直接粘贴整条 Windows 命令行，编辑器会自动拆分 executable 与各个参数并回填；“环境变量”用 `KEY=VALUE`。`http` 的“请求头”使用“键 / 值”两列表格，新建或编辑时分别填写 key 和 value；“填写 Auth Token…”可只输入 token，编辑器会自动写入 `Authorization: Bearer <token>`。
+`mcp.servers` 的条目支持 `stdio` 和 `http`。`stdio` 参数使用 argv 列表编辑器；“完整命令…”按当前系统解析：Windows 使用 `CommandLineToArgvW`，Linux/macOS 使用支持单引号、双引号、反斜杠转义与空参数的 shell-like parser。`http` 请求头按键/值编辑，“填写 Auth Token…”会写成 `Authorization: Bearer <token>`。
 
 ## ownerToken 的处理
 
-`ownerToken` 已不再写入 `config.json`，而是按配置文件路径保存在 **Windows Credential Manager** 中。令牌**不会显示在界面上**，任何控件都不包含它的内容（这一点由自检断言保证）。可用的操作：
+`ownerToken` 不再写入新版本 `config.json`，而是按配置文件路径保存在系统凭据库：
 
-- **复制**：从 Windows Credential Manager 重新读取后写入剪贴板，界面只提示“已复制”，状态行显示为 `已设置 · N 个字符`
-- **重新生成**：生成与 `chatroom init` 相同的 32 字节 base64url 令牌（43 字符），立即写入系统凭据库并回读校验；正在运行的 ChatRoom 仍使用启动时加载到内存中的旧值，因此需要重启后才使用新值
-- **清除**：从 Windows Credential Manager 删除；只有在配置文件已经关闭所有需要认证的入口后才允许清除
-- **旧配置迁移**：打开仍含 `auth.ownerToken` 的旧配置时，先写入系统凭据库并回读验证，成功后再从 JSON 中删除明文字段；若系统凭据中已有不同值则拒绝覆盖
+- Windows：Credential Manager
+- macOS：Keychain / Security.framework
+- Linux：Secret Service / libsecret
+
+凭据 `service=ChatRoom`，`account=owner-token:v1:<sha256(configPath)>`，与 ChatRoom 的 `@github/keytar` 适配器一致。Windows 计算 ID 前对路径转小写；macOS/Linux 保留路径大小写。
+
+令牌不会显示在界面上，可复制、重新生成或清除。旧配置中的 `auth.ownerToken` 会在系统凭据库可用时安全迁移并回读验证；若凭据库暂时不可用，不会删除旧明文字段，纯本地配置仍可继续打开。
 
 重新生成 `ownerToken` 本身**不会级联撤销** SQLite 中已经签发的 OAuth access/refresh token 或现有 WebUI session；它影响的是重启后的 owner-token 登录和新的 OAuth 授权确认。
 
@@ -66,32 +95,48 @@ bin\Debug\net48\ChatRoomTray.exe --config
 7. **外部修改保护**：若文件在打开后被其他程序改动，保存时会提示并允许重新加载
 8. **`sse` 传输被拒绝**，并给出与 ChatRoom 相同的指引（改用 `http`）
 
-## 无头模式（便于验证与脚本化）
+## CLI / 无头验证
 
-GUI 子系统程序从控制台运行时不会阻塞，建议用 `Start-Process -Wait`：
+Windows 的 net48 仍是 WinExe，建议从控制台用 `Start-Process -Wait`：
 
 ```powershell
 $exe = "bin/Debug/net48/ChatRoomTray.exe"
 
-# 校验（默认路径来自 CHATROOM_CONFIG 或 %APPDATA%\ChatRoom\config.json）
 Start-Process $exe -ArgumentList '--check','--report','check.txt' -Wait -NoNewWindow
-
-# 载入真实配置 → 另写一份 → 比对是否语义一致（不改动源文件）
-Start-Process $exe -ArgumentList '--roundtrip','"C:\...\config.json"','out.json' -Wait -NoNewWindow
-
-# 自检：编码、令牌生成、校验规则、写入不变量、往返一致性
 Start-Process $exe -ArgumentList '--selftest','--report','selftest.txt' -Wait -NoNewWindow
-
-# 界面自检：构造窗体与对话框并断言标签对齐、令牌未泄漏
 Start-Process $exe -ArgumentList '--uismoke','--report','uismoke.txt' -Wait -NoNewWindow
 ```
 
-退出码：`0` 通过、`1`/`2` 校验或比对失败、`3` 读取失败、`64` 参数错误。
+Linux 的 net10 构建可直接执行 apphost：
+
+```bash
+./ChatRoomTray --check
+./ChatRoomTray --selftest
+./ChatRoomTray --uismoke
+```
+
+macOS bundle 的 CLI 入口位于 `.app/Contents/MacOS/ChatRoomTray`，例如：
+
+```bash
+./ChatRoomTray.app/Contents/MacOS/ChatRoomTray --selftest
+```
+
+默认配置路径由当前平台决定，也可统一通过 `CHATROOM_CONFIG` 覆盖。退出码：`0` 通过、`1`/`2` 校验或比对失败、`3` 读取失败、`64` 参数错误。
+
+## 已验证的跨平台路径
+
+- Windows net48：0 warning / 0 error，ILRepack 单 EXE 成功，`--selftest` 与 `--uismoke` 均通过。
+- .NET 10 + GTK：交叉编译 0 warning / 0 error。
+- Linux x64 self-contained：在 WSL2 Ubuntu 上真实运行 `--selftest` 通过，POSIX 命令解析和 XDG 路径生效。
+- Linux WSLg + GTK3：真实运行 Eto `--uismoke` 通过。
+- Linux 缺少 `libsecret-1` 时：纯本地配置 `--check` 为 0 error + 1 warning，不会被错误阻止。
+- macOS Mac64：已交叉构建 `osx-x64` / `osx-arm64` 两个 `.app`，0 error；最终原生运行仍需在 macOS 机器上验证。
 
 ## 需要知道的几点
 
 - **改完要重启 ChatRoom 才生效**：ChatRoom 只在启动时读取配置。
-- **保存会规范化格式**：输出为 2 空格缩进、键顺序固定。手工的制表符缩进/对齐风格会被改写。
-- **缺省段会被补齐**：例如原本没有 `http` 段时，保存后会写入 ChatRoom 的默认值（数值与 `defaultConfig()` 一致，行为不变）。
-- **`env` / `headers` 里的密钥以明文保存在配置文件中**（与 ChatRoom 本身的做法一致；该文件位于用户配置目录）。编辑器不会把它们显示在令牌那类“脱敏”位置——因为对 MCP 服务而言它们是必要的配置内容。
-- **本工具会修改两类本地状态**：普通设置写入配置文件；`ownerToken` 只读写 Windows Credential Manager。工具不会重启 ChatRoom，也不会修改数据库或 Cloud 状态。
+- **保存会规范化格式**：输出为 2 空格缩进、键顺序固定，并补齐缺省段。
+- **`env` / `headers` 中的密钥以明文保存在配置文件中**，与 ChatRoom 本身的设计一致。
+- **打开所在文件夹**：Windows 使用系统 Shell，macOS 使用 `open`，Linux 使用 `xdg-open`。
+- **Linux 凭据依赖**：认证功能需要 `libsecret-1` 和 Secret Service；若二者不可用，纯本地配置仍可打开/校验并给出 warning。
+- **除 Windows Tray 外，ConfigEditor 不依赖 WinForms API**。

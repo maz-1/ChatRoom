@@ -1,36 +1,72 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <!-- Windows keeps the existing tray build. Linux/macOS build the same
+         project as the cross-platform configuration editor/CLI. -->
     <TargetFramework>net48</TargetFramework>
+    <TargetFramework Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(CrossPlatformEditor)' == 'true'">net10.0</TargetFramework>
+
+    <OutputType Condition="'$(TargetFramework)' == 'net48'">WinExe</OutputType>
+    <OutputType Condition="'$(TargetFramework)' != 'net48'">Exe</OutputType>
     <AssemblyName>ChatRoomTray</AssemblyName>
     <RootNamespace>ChatRoomTray</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <ApplicationIcon>chatgpt.ico</ApplicationIcon>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net48'">
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <ApplicationIcon>chatgpt.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- Gtk is the Linux backend. Mac64 is Eto's .NET-compatible macOS
+         backend that does not require a separate macOS workload. -->
+    <EtoPlatform Condition="'$(EtoPlatform)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">Mac64</EtoPlatform>
+    <EtoPlatform Condition="'$(EtoPlatform)' == ''">Gtk</EtoPlatform>
+  </PropertyGroup>
+
   <ItemGroup>
+    <PackageReference Include="Eto.Forms" Version="2.11.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
 
-  <ItemGroup>
     <EmbeddedResource Include="chatgpt.ico" LogicalName="ChatRoomTray.chatgpt.ico" />
+
+    <PackageReference Include="Eto.Platform.Windows" Version="2.11.0" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.46" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.46" PrivateAssets="all" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(EtoPlatform)' == 'Gtk'">
+    <PackageReference Include="Eto.Platform.Gtk" Version="2.11.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(EtoPlatform)' == 'Mac64'">
+    <RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(EtoPlatform)' == 'Mac64'">
+    <PackageReference Include="Eto.Platform.Mac64" Version="2.11.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'net48'">
+    <!-- The system tray remains Windows-only by design. -->
+    <Compile Remove="StartupArgsDialog.cs" />
+    <Compile Remove="TrayApplicationContext.cs" />
+    <Compile Remove="TraySettings.cs" />
   </ItemGroup>
 
 </Project>

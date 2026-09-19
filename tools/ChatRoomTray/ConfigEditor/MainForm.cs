@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Windows.Forms;
+using Eto.Drawing;
+using Eto.Forms;
 
 namespace ChatRoomTray.ConfigEditor;
 
@@ -41,7 +42,7 @@ public partial class MainForm : Form
         _editServerButton.Click += (_, _) => EditServer();
         _removeServerButton.Click += (_, _) => RemoveServer();
 
-        FormClosing += OnFormClosing;
+        Closing += OnFormClosing;
     }
 
     // ---------------------------------------------------------------- loading
@@ -51,35 +52,52 @@ public partial class MainForm : Form
         _path = path;
         _pathBox.Text = path;
 
-        if (!File.Exists(path))
+        if (!File.Exists(path) && !createWhenMissing)
         {
-            if (!createWhenMissing)
+            _config = ConfigStore.CreateDefault();
+            try
             {
-                _config = ConfigStore.CreateDefault();
                 _ownerToken = OwnerTokenStore.Read(path);
-                _loadedLastWriteUtc = null;
-                _rootsList.Items.Clear();
-                foreach (var root in _config.AllowedRoots) _rootsList.Items.Add(root);
-                LoadIntoUi();
-                Snapshot();
-                SetStatus($"配置文件不存在，已载入默认值：{path}（点击“保存”即会创建）");
-                RunValidation(showStatus: false);
-                return;
             }
+            catch
+            {
+                _ownerToken = null;
+            }
+
+            _loadedLastWriteUtc = null;
+            LoadIntoUi();
+            Snapshot();
+            SetStatus($"配置文件不存在，已载入默认值：{path}（点击“保存”即会创建）");
+            RunValidation(showStatus: false);
+            return;
         }
 
         try
         {
             var loaded = ConfigStore.Load(path);
             _config = loaded.Config;
-            _ownerToken = LoadAndMigrateOwnerToken(path, loaded);
+            string? credentialWarning = null;
+            try
+            {
+                _ownerToken = LoadAndMigrateOwnerToken(path, loaded);
+            }
+            catch (OwnerTokenStoreException error)
+            {
+                // Match ChatRoom runtime behavior: a temporary keychain/Secret
+                // Service failure must not hide an otherwise valid local config.
+                _ownerToken = null;
+                credentialWarning = error.Message;
+            }
+
             _loadedLastWriteUtc = File.GetLastWriteTimeUtc(path);
             LoadIntoUi();
             Snapshot();
             var unknown = loaded.UnknownKeys.Count == 0
                 ? string.Empty
                 : $"（另有 {loaded.UnknownKeys.Count} 个未知字段）";
-            SetStatus($"已加载 {path}{unknown}");
+            SetStatus(credentialWarning is null
+                ? $"已加载 {path}{unknown}"
+                : $"已加载 {path}{unknown}；系统凭据库暂不可用：{credentialWarning}");
             RunValidation(showStatus: false);
         }
         catch (Exception error)
@@ -89,7 +107,7 @@ public partial class MainForm : Form
                 $"{error.Message}\n\n已改为显示默认值，未修改磁盘上的文件。",
                 "读取失败",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                MessageBoxType.Warning);
             _config = ConfigStore.CreateDefault();
             _ownerToken = null;
             _loadedLastWriteUtc = null;
@@ -106,26 +124,24 @@ public partial class MainForm : Form
         _databasePathBox.Text = _config.DatabasePath ?? string.Empty;
 
         _hostBox.Text = _config.Server.Host;
-        _portBox.Value = Clamp(_config.Server.Port, _portBox.Minimum, _portBox.Maximum);
+        _portBox.Value = Clamp(_config.Server.Port, _portBox.MinValue, _portBox.MaxValue);
         _localWebAuthBox.Checked = _config.Auth.LocalWebAuth;
         _mcpPublicBaseUrlBox.Text = _config.Auth.McpPublicBaseUrl ?? string.Empty;
         _webPublicBaseUrlBox.Text = _config.Auth.WebPublicBaseUrl ?? string.Empty;
 
-        _redirectHostsList.Items.Clear();
-        foreach (var host in _config.Auth.AllowedRedirectHosts) _redirectHostsList.Items.Add(host);
+        SetListValues(_redirectHostsList, _config.Auth.AllowedRedirectHosts);
 
-        _httpDefaultTimeout.Value = Clamp(_config.Http.DefaultTimeoutMs, _httpDefaultTimeout.Minimum, _httpDefaultTimeout.Maximum);
-        _httpMaxTimeout.Value = Clamp(_config.Http.MaxTimeoutMs, _httpMaxTimeout.Minimum, _httpMaxTimeout.Maximum);
-        _httpMaxResponseBytes.Value = Clamp(_config.Http.MaxResponseBytes, _httpMaxResponseBytes.Minimum, _httpMaxResponseBytes.Maximum);
-        _operationsMaxPayload.Value = Clamp(_config.Operations.MaxPayloadBytes, _operationsMaxPayload.Minimum, _operationsMaxPayload.Maximum);
-        _processMaxOutput.Value = Clamp(_config.Process.MaxOutputBytes, _processMaxOutput.Minimum, _processMaxOutput.Maximum);
-        _processDefaultTimeout.Value = Clamp(_config.Process.DefaultTimeoutMs, _processDefaultTimeout.Minimum, _processDefaultTimeout.Maximum);
-        _processMaxCompleted.Value = Clamp(_config.Process.MaxCompletedProcesses, _processMaxCompleted.Minimum, _processMaxCompleted.Maximum);
-        _mcpCallTimeout.Value = Clamp(_config.Mcp.CallTimeoutMs, _mcpCallTimeout.Minimum, _mcpCallTimeout.Maximum);
-        _mcpMaxResultBytes.Value = Clamp(_config.Mcp.MaxResultBytes, _mcpMaxResultBytes.Minimum, _mcpMaxResultBytes.Maximum);
+        _httpDefaultTimeout.Value = Clamp(_config.Http.DefaultTimeoutMs, _httpDefaultTimeout.MinValue, _httpDefaultTimeout.MaxValue);
+        _httpMaxTimeout.Value = Clamp(_config.Http.MaxTimeoutMs, _httpMaxTimeout.MinValue, _httpMaxTimeout.MaxValue);
+        _httpMaxResponseBytes.Value = Clamp(_config.Http.MaxResponseBytes, _httpMaxResponseBytes.MinValue, _httpMaxResponseBytes.MaxValue);
+        _operationsMaxPayload.Value = Clamp(_config.Operations.MaxPayloadBytes, _operationsMaxPayload.MinValue, _operationsMaxPayload.MaxValue);
+        _processMaxOutput.Value = Clamp(_config.Process.MaxOutputBytes, _processMaxOutput.MinValue, _processMaxOutput.MaxValue);
+        _processDefaultTimeout.Value = Clamp(_config.Process.DefaultTimeoutMs, _processDefaultTimeout.MinValue, _processDefaultTimeout.MaxValue);
+        _processMaxCompleted.Value = Clamp(_config.Process.MaxCompletedProcesses, _processMaxCompleted.MinValue, _processMaxCompleted.MaxValue);
+        _mcpCallTimeout.Value = Clamp(_config.Mcp.CallTimeoutMs, _mcpCallTimeout.MinValue, _mcpCallTimeout.MaxValue);
+        _mcpMaxResultBytes.Value = Clamp(_config.Mcp.MaxResultBytes, _mcpMaxResultBytes.MinValue, _mcpMaxResultBytes.MaxValue);
 
-        _rootsList.Items.Clear();
-        foreach (var root in _config.AllowedRoots) _rootsList.Items.Add(root);
+        SetListValues(_rootsList, _config.AllowedRoots);
 
         RefreshServerList();
         RefreshTokenStatus();
@@ -133,24 +149,17 @@ public partial class MainForm : Form
 
     private void ReadFromUi()
     {
-        _config.DataDir = _dataDirBox.Text.Trim();
-        _config.DatabasePath = NullIfBlank(_databasePathBox.Text);
+        _config.DataDir = (_dataDirBox.Text ?? string.Empty).Trim();
+        _config.DatabasePath = NullIfBlank(_databasePathBox.Text ?? string.Empty);
 
-        _config.Server.Host = _hostBox.Text.Trim();
+        _config.Server.Host = (_hostBox.Text ?? string.Empty).Trim();
         _config.Server.Port = (int)_portBox.Value;
-        _config.Auth.LocalWebAuth = _localWebAuthBox.Checked;
-        _config.Auth.McpPublicBaseUrl = NullIfBlank(_mcpPublicBaseUrlBox.Text);
-        _config.Auth.WebPublicBaseUrl = NullIfBlank(_webPublicBaseUrlBox.Text);
+        _config.Auth.LocalWebAuth = _localWebAuthBox.Checked == true;
+        _config.Auth.McpPublicBaseUrl = NullIfBlank(_mcpPublicBaseUrlBox.Text ?? string.Empty);
+        _config.Auth.WebPublicBaseUrl = NullIfBlank(_webPublicBaseUrlBox.Text ?? string.Empty);
 
-        _config.Auth.AllowedRedirectHosts = _redirectHostsList.Items
-            .Cast<object>()
-            .Select(item => item.ToString() ?? string.Empty)
-            .ToList();
-
-        _config.AllowedRoots = _rootsList.Items
-            .Cast<object>()
-            .Select(item => item.ToString() ?? string.Empty)
-            .ToList();
+        _config.Auth.AllowedRedirectHosts = ListValues(_redirectHostsList);
+        _config.AllowedRoots = ListValues(_rootsList);
 
         _config.Http.DefaultTimeoutMs = (int)_httpDefaultTimeout.Value;
         _config.Http.MaxTimeoutMs = (int)_httpMaxTimeout.Value;
@@ -175,13 +184,13 @@ public partial class MainForm : Form
         {
             if (OwnerToken.IsPresent(stored) && !string.Equals(stored, legacy, StringComparison.Ordinal))
                 throw new InvalidOperationException(
-                    "config.json 中的旧 ownerToken 与 Windows 凭据管理器中的 ownerToken 不一致；为避免覆盖凭据，迁移已停止。");
+                    "config.json 中的旧 ownerToken 与系统凭据库中的 ownerToken 不一致；为避免覆盖凭据，迁移已停止。");
             if (!OwnerToken.IsPresent(stored))
             {
                 OwnerTokenStore.Write(path, legacy!);
                 stored = OwnerTokenStore.Read(path);
                 if (!string.Equals(stored, legacy, StringComparison.Ordinal))
-                    throw new InvalidOperationException("ownerToken 写入 Windows 凭据管理器后校验失败。");
+                    throw new InvalidOperationException("ownerToken 写入系统凭据库后校验失败。");
             }
         }
 
@@ -195,7 +204,7 @@ public partial class MainForm : Form
         var present = OwnerToken.IsPresent(_ownerToken);
         _copyTokenButton.Enabled = present;
         _clearTokenButton.Enabled = present;
-        _tokenStatus.ForeColor = present ? SystemColors.ControlText : Color.Firebrick;
+        _tokenStatus.TextColor = present ? SystemColors.ControlText : Colors.Firebrick;
     }
 
     private void CopyOwnerToken()
@@ -208,9 +217,10 @@ public partial class MainForm : Form
                 RefreshTokenStatus();
                 return;
             }
-            Clipboard.SetText(_ownerToken!);
+
+            Clipboard.Instance.Text = _ownerToken!;
             RefreshTokenStatus();
-            SetStatus("ownerToken 已从 Windows 凭据管理器复制到剪贴板（界面不会显示它的内容）");
+            SetStatus("ownerToken 已从系统凭据库复制到剪贴板（界面不会显示它的内容）");
         }
         catch (Exception error)
         {
@@ -219,7 +229,7 @@ public partial class MainForm : Form
                 $"复制 ownerToken 失败：{error.Message}",
                 "复制失败",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                MessageBoxType.Warning);
         }
     }
 
@@ -234,8 +244,8 @@ public partial class MainForm : Form
             "新令牌不会显示在界面上，只能复制或重新生成。是否继续？",
             "重新生成 ownerToken",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
+            MessageBoxType.Warning,
+            MessageBoxDefaultButton.No);
         if (answer != DialogResult.Yes) return;
 
         try
@@ -246,16 +256,12 @@ public partial class MainForm : Form
             if (!string.Equals(_ownerToken, token, StringComparison.Ordinal))
                 throw new InvalidOperationException("新 ownerToken 写入后校验失败。");
             RefreshTokenStatus();
-            SetStatus("已重新生成 ownerToken 并写入 Windows 凭据管理器；重启 ChatRoom 后使用新令牌");
+            SetStatus("已重新生成 ownerToken 并写入系统凭据库；重启 ChatRoom 后使用新令牌");
         }
         catch (Exception error)
         {
-            MessageBox.Show(
-                this,
-                $"重新生成 ownerToken 失败：{error.Message}",
-                "生成失败",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"重新生成 ownerToken 失败：{error.Message}", "生成失败",
+                MessageBoxButtons.OK, MessageBoxType.Warning);
         }
     }
 
@@ -264,32 +270,27 @@ public partial class MainForm : Form
         ReadFromUi();
         if (IsDirty())
         {
-            MessageBox.Show(
-                this,
-                "清除 ownerToken 会立即修改 Windows 凭据管理器。请先保存当前配置修改，再执行清除。",
-                "请先保存配置",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            MessageBox.Show(this,
+                "清除 ownerToken 会立即修改系统凭据库。请先保存当前配置修改，再执行清除。",
+                "请先保存配置", MessageBoxButtons.OK, MessageBoxType.Warning);
             return;
         }
+
         if (RequiresOwnerToken(_config))
         {
-            MessageBox.Show(
-                this,
+            MessageBox.Show(this,
                 "当前配置启用了需要认证的入口。请先关闭 localWebAuth / 公网地址并保存配置，再清除 ownerToken。",
-                "不能清除 ownerToken",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+                "不能清除 ownerToken", MessageBoxButtons.OK, MessageBoxType.Warning);
             return;
         }
 
         var answer = MessageBox.Show(
             this,
-            "这会立即从 Windows 凭据管理器删除当前配置对应的 ownerToken。\n\n是否继续？",
+            "这会立即从系统凭据库删除当前配置对应的 ownerToken。\n\n是否继续？",
             "清除 ownerToken",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
+            MessageBoxType.Warning,
+            MessageBoxDefaultButton.No);
         if (answer != DialogResult.Yes) return;
 
         try
@@ -297,57 +298,60 @@ public partial class MainForm : Form
             OwnerTokenStore.Delete(_path);
             _ownerToken = null;
             RefreshTokenStatus();
-            SetStatus("已从 Windows 凭据管理器清除 ownerToken");
+            SetStatus("已从系统凭据库清除 ownerToken");
         }
         catch (Exception error)
         {
-            MessageBox.Show(
-                this,
-                $"清除 ownerToken 失败：{error.Message}",
-                "清除失败",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"清除 ownerToken 失败：{error.Message}", "清除失败",
+                MessageBoxButtons.OK, MessageBoxType.Warning);
         }
     }
 
     private static bool RequiresOwnerToken(ChatRoomConfig config) =>
-        config.Auth.LocalWebAuth
-        || !string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl)
-        || !string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl);
+        ConfigValidator.AuthenticationUsesOwnerToken(config);
 
     // ------------------------------------------------------------------- mcp
 
     private void RefreshServerList()
     {
         var selected = SelectedServerName();
-        _serversView.BeginUpdate();
-        _serversView.Items.Clear();
-        foreach (var pair in _config.Mcp.Servers.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        var rows = _config.Mcp.Servers
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(pair => new ServerGridRow
+            {
+                Name = pair.Key,
+                Transport = pair.Value.TransportType,
+                Target = pair.Value.Describe(),
+            })
+            .ToList();
+
+        _serversView.DataStore = rows;
+        if (selected is not null)
         {
-            var name = pair.Key;
-            var server = pair.Value;
-            var item = new ListViewItem(name) { Tag = name };
-            item.SubItems.Add(server.TransportType);
-            item.SubItems.Add(server.Describe());
-            _serversView.Items.Add(item);
-            if (name == selected) item.Selected = true;
+            var index = rows.FindIndex(row => row.Name == selected);
+            if (index >= 0) _serversView.SelectedRow = index;
         }
-        _serversView.EndUpdate();
-        _editServerButton.Enabled = _serversView.SelectedItems.Count > 0;
-        _removeServerButton.Enabled = _serversView.SelectedItems.Count > 0;
+
+        UpdateServerButtons();
     }
 
     private string? SelectedServerName() =>
-        _serversView.SelectedItems.Count > 0 ? _serversView.SelectedItems[0].Tag as string : null;
+        (_serversView.SelectedItem as ServerGridRow)?.Name;
+
+    private void UpdateServerButtons()
+    {
+        var selected = _serversView.SelectedItem is ServerGridRow;
+        _editServerButton.Enabled = selected;
+        _removeServerButton.Enabled = selected;
+    }
 
     private void AddServer()
     {
-        // .NET Framework 4.8 has no Enumerable.ToHashSet().
         var existing = new HashSet<string>(_config.Mcp.Servers.Keys, StringComparer.Ordinal);
         using var dialog = new McpServerDialog(null, null, existing);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null) return;
+        if (!dialog.ShowModal(this) || dialog.ServerConfig is null) return;
 
-        _config.Mcp.Servers[dialog.ServerName] = dialog.Result;
+        _config.Mcp.Servers[dialog.ServerName] = dialog.ServerConfig;
         RefreshServerList();
         SelectServer(dialog.ServerName);
         SetStatus($"已添加 MCP 服务“{dialog.ServerName}”，保存后生效");
@@ -362,10 +366,10 @@ public partial class MainForm : Form
             _config.Mcp.Servers.Keys.Where(key => key != name),
             StringComparer.Ordinal);
         using var dialog = new McpServerDialog(name, server, existing);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null) return;
+        if (!dialog.ShowModal(this) || dialog.ServerConfig is null) return;
 
         if (dialog.ServerName != name) _config.Mcp.Servers.Remove(name);
-        _config.Mcp.Servers[dialog.ServerName] = dialog.Result;
+        _config.Mcp.Servers[dialog.ServerName] = dialog.ServerConfig;
         RefreshServerList();
         SelectServer(dialog.ServerName);
         SetStatus($"已更新 MCP 服务“{dialog.ServerName}”，保存后生效");
@@ -381,8 +385,8 @@ public partial class MainForm : Form
             $"确定要删除 MCP 服务“{name}”吗？",
             "删除 MCP 服务",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button2);
+            MessageBoxType.Question,
+            MessageBoxDefaultButton.No);
         if (answer != DialogResult.Yes) return;
 
         _config.Mcp.Servers.Remove(name);
@@ -392,67 +396,91 @@ public partial class MainForm : Form
 
     private void SelectServer(string name)
     {
-        foreach (ListViewItem item in _serversView.Items)
+        var rows = (_serversView.DataStore ?? Enumerable.Empty<object>())
+            .OfType<ServerGridRow>()
+            .ToList();
+        var index = rows.FindIndex(row => row.Name == name);
+        if (index >= 0)
         {
-            if ((item.Tag as string) != name) continue;
-            item.Selected = true;
-            item.Focused = true;
-            item.EnsureVisible();
-            break;
+            _serversView.SelectedRow = index;
+            _serversView.ScrollToRow(index);
         }
-        _editServerButton.Enabled = _serversView.SelectedItems.Count > 0;
-        _removeServerButton.Enabled = _serversView.SelectedItems.Count > 0;
+
+        UpdateServerButtons();
     }
 
     // -------------------------------------------------------------- list edits
 
     private void AddRoot()
     {
-        using var dialog = new FolderBrowserDialog { Description = "选择工作区根目录", ShowNewFolderButton = true };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        if (_rootsList.Items.Contains(dialog.SelectedPath)) return;
-        _rootsList.Items.Add(dialog.SelectedPath);
+        using var dialog = new SelectFolderDialog { Title = "选择工作区根目录" };
+        if (dialog.ShowDialog(this) != DialogResult.Ok) return;
+        var values = ListValues(_rootsList);
+        if (values.Contains(dialog.Directory, StringComparer.Ordinal)) return;
+        values.Add(dialog.Directory);
+        SetListValues(_rootsList, values, values.Count - 1);
     }
 
     private void EditRoot()
     {
         if (_rootsList.SelectedIndex < 0) return;
-        using var dialog = new FolderBrowserDialog { Description = "选择工作区根目录", ShowNewFolderButton = true };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        _rootsList.Items[_rootsList.SelectedIndex] = dialog.SelectedPath;
+        var index = _rootsList.SelectedIndex;
+        var values = ListValues(_rootsList);
+        using var dialog = new SelectFolderDialog
+        {
+            Title = "选择工作区根目录",
+            Directory = values[index],
+        };
+        if (dialog.ShowDialog(this) != DialogResult.Ok) return;
+        values[index] = dialog.Directory;
+        SetListValues(_rootsList, values, index);
     }
 
     private void AddRedirectHost() => PromptForValue("添加重定向主机", "主机名：", string.Empty, value =>
     {
-        if (!_redirectHostsList.Items.Contains(value)) _redirectHostsList.Items.Add(value);
+        var values = ListValues(_redirectHostsList);
+        if (values.Contains(value, StringComparer.Ordinal)) return;
+        values.Add(value);
+        SetListValues(_redirectHostsList, values, values.Count - 1);
     });
 
     private void EditRedirectHost()
     {
         if (_redirectHostsList.SelectedIndex < 0) return;
-        var current = _redirectHostsList.SelectedItem?.ToString() ?? string.Empty;
+        var index = _redirectHostsList.SelectedIndex;
+        var values = ListValues(_redirectHostsList);
+        var current = values[index];
         PromptForValue("编辑重定向主机", "主机名：", current, value =>
-            _redirectHostsList.Items[_redirectHostsList.SelectedIndex] = value);
+        {
+            values[index] = value;
+            SetListValues(_redirectHostsList, values, index);
+        });
     }
 
     private void RemoveSelected(ListBox list, string label)
     {
         if (list.SelectedIndex < 0) return;
-        var value = list.SelectedItem?.ToString() ?? string.Empty;
+        var index = list.SelectedIndex;
+        var values = ListValues(list);
+        if (index >= values.Count) return;
+        var value = values[index];
         var answer = MessageBox.Show(
             this,
             $"确定要删除{label}“{value}”吗？",
             $"删除{label}",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button2);
-        if (answer == DialogResult.Yes) list.Items.RemoveAt(list.SelectedIndex);
+            MessageBoxType.Question,
+            MessageBoxDefaultButton.No);
+        if (answer != DialogResult.Yes) return;
+
+        values.RemoveAt(index);
+        SetListValues(list, values, values.Count == 0 ? -1 : Math.Min(index, values.Count - 1));
     }
 
     private void PromptForValue(string title, string label, string initial, Action<string> apply)
     {
         using var dialog = new TextInputDialog(title, label, initial);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!dialog.ShowModal(this)) return;
         var value = dialog.Value.Trim();
         if (value.Length == 0) return;
         apply(value);
@@ -465,21 +493,23 @@ public partial class MainForm : Form
             using var dialog = new SaveFileDialog
             {
                 Title = "选择数据库文件",
-                Filter = "SQLite 数据库|*.sqlite;*.db|所有文件|*.*",
-                FileName = Path.GetFileName(target.Text),
-                InitialDirectory = SafeDirectory(target.Text),
+                FileName = Path.GetFileName(target.Text ?? string.Empty),
+                Directory = ToDirectoryUri(SafeDirectory(target.Text ?? string.Empty)),
             };
-            if (dialog.ShowDialog(this) == DialogResult.OK) target.Text = dialog.FileName;
+            dialog.Filters.Add(new FileFilter("SQLite 数据库", ".sqlite", ".db"));
+            dialog.Filters.Add(new FileFilter("所有文件", ".*"));
+            if (dialog.ShowDialog(this) == DialogResult.Ok)
+                target.Text = dialog.FileName;
             return;
         }
 
-        using var browser = new FolderBrowserDialog
+        using var browser = new SelectFolderDialog
         {
-            Description = "选择目录",
-            ShowNewFolderButton = true,
-            SelectedPath = SafeDirectory(target.Text),
+            Title = "选择目录",
+            Directory = SafeDirectory(target.Text ?? string.Empty),
         };
-        if (browser.ShowDialog(this) == DialogResult.OK) target.Text = browser.SelectedPath;
+        if (browser.ShowDialog(this) == DialogResult.Ok)
+            target.Text = browser.Directory;
     }
 
     // ------------------------------------------------------------ file actions
@@ -501,7 +531,7 @@ public partial class MainForm : Form
             OwnerToken.IsPresent(_ownerToken));
         RenderIssues();
         SetStatus(OwnerToken.IsPresent(_ownerToken)
-            ? "已载入默认配置；ownerToken 已存在于 Windows 凭据管理器"
+            ? "已载入默认配置；ownerToken 已存在于系统凭据库"
             : "已载入默认配置；ownerToken 尚未生成");
     }
 
@@ -512,10 +542,11 @@ public partial class MainForm : Form
         using var dialog = new OpenFileDialog
         {
             Title = "打开 ChatRoom 配置文件",
-            Filter = "JSON 配置|*.json|所有文件|*.*",
-            InitialDirectory = SafeDirectory(_path),
+            Directory = ToDirectoryUri(SafeDirectory(_path)),
         };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        dialog.Filters.Add(new FileFilter("JSON 配置", ".json"));
+        dialog.Filters.Add(new FileFilter("所有文件", ".*"));
+        if (dialog.ShowDialog(this) != DialogResult.Ok) return;
         LoadConfiguration(dialog.FileName, createWhenMissing: false);
     }
 
@@ -538,7 +569,7 @@ public partial class MainForm : Form
                 ? $"已保存 {_path}\n\n请重启 ChatRoom 使其生效。"
                 : $"已保存 {_path}\n备份：{backup}\n\n请重启 ChatRoom 使其生效。";
             SetStatus("已保存");
-            MessageBox.Show(this, message, "保存成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, message, "保存成功", MessageBoxButtons.OK, MessageBoxType.Information);
         }
         catch (ConfigChangedOnDiskException error)
         {
@@ -547,12 +578,13 @@ public partial class MainForm : Form
                 $"{error.Message}\n\n是否重新加载磁盘上的内容？",
                 "文件已被修改",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
+                MessageBoxType.Warning,
+                MessageBoxDefaultButton.No);
             if (answer == DialogResult.Yes) LoadConfiguration(_path, createWhenMissing: false);
         }
         catch (Exception error)
         {
-            MessageBox.Show(this, error.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, error.Message, "保存失败", MessageBoxButtons.OK, MessageBoxType.Error);
         }
     }
 
@@ -563,11 +595,12 @@ public partial class MainForm : Form
         using var dialog = new SaveFileDialog
         {
             Title = "另存为",
-            Filter = "JSON 配置|*.json|所有文件|*.*",
             FileName = Path.GetFileName(_path),
-            InitialDirectory = SafeDirectory(_path),
+            Directory = ToDirectoryUri(SafeDirectory(_path)),
         };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        dialog.Filters.Add(new FileFilter("JSON 配置", ".json"));
+        dialog.Filters.Add(new FileFilter("所有文件", ".*"));
+        if (dialog.ShowDialog(this) != DialogResult.Ok) return;
 
         string? targetPath = null;
         var rollbackTargetToken = false;
@@ -600,16 +633,17 @@ public partial class MainForm : Form
             _loadedLastWriteUtc = File.GetLastWriteTimeUtc(_path);
             RefreshTokenStatus();
             Snapshot();
-            SetStatus($"已另存为 {_path}；ownerToken 由 Windows 凭据管理器按配置路径管理");
+            SetStatus($"已另存为 {_path}；ownerToken 由系统凭据库按配置路径管理");
         }
         catch (Exception error)
         {
             if (rollbackTargetToken && targetPath is not null)
             {
                 try { OwnerTokenStore.Delete(targetPath); }
-                catch { /* Preserve the original save error; the target credential can be cleaned manually. */ }
+                catch { }
             }
-            MessageBox.Show(this, error.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+            MessageBox.Show(this, error.Message, "保存失败", MessageBoxButtons.OK, MessageBoxType.Error);
         }
     }
 
@@ -628,7 +662,7 @@ public partial class MainForm : Form
                 $"存在 {errors} 项错误，已阻止保存。\n\nChatRoom 会拒绝启动这样的配置文件，请在下方“校验结果”中逐项修正。",
                 "校验未通过",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+                MessageBoxType.Error);
             return false;
         }
 
@@ -640,7 +674,8 @@ public partial class MainForm : Form
                 $"有 {warnings} 条提醒（不影响 ChatRoom 启动），是否继续保存？",
                 "确认保存",
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
+                MessageBoxType.Question,
+                MessageBoxDefaultButton.No);
             if (answer != DialogResult.Yes) return false;
         }
 
@@ -663,9 +698,6 @@ public partial class MainForm : Form
             credentialError = error.Message;
         }
 
-        // If the store itself cannot be read, replace the generic "missing token"
-        // error with a more precise credential-store error. For a local-only
-        // configuration this remains a warning, matching ChatRoom runtime behavior.
         var tokenPresentForRules = credentialError is not null && requiresToken
             ? true
             : tokenPresent;
@@ -679,9 +711,10 @@ public partial class MainForm : Form
                 requiresToken ? IssueSeverity.Error : IssueSeverity.Warning,
                 "ownerToken",
                 requiresToken
-                    ? $"无法读取 Windows 凭据管理器，而当前配置需要 ownerToken：{credentialError}"
-                    : $"暂时无法读取 Windows 凭据管理器；当前纯本地配置不依赖 ownerToken：{credentialError}"));
+                    ? $"无法读取系统凭据库，而当前配置需要 ownerToken：{credentialError}"
+                    : $"暂时无法读取系统凭据库；当前纯本地配置不依赖 ownerToken：{credentialError}"));
         }
+
         return issues;
     }
 
@@ -702,24 +735,24 @@ public partial class MainForm : Form
                     : $"错误 {errors} 项，警告 {warnings} 项，详见下方“校验结果”。",
                 "校验结果",
                 MessageBoxButtons.OK,
-                errors > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                errors > 0 ? MessageBoxType.Warning : MessageBoxType.Information);
         }
+
         SetStatus(errors == 0 ? $"校验通过（警告 {warnings} 项）" : $"校验未通过：{errors} 项错误");
     }
 
     private void RenderIssues()
     {
-        _issuesView.BeginUpdate();
-        _issuesView.Items.Clear();
-        foreach (var issue in _issues.OrderBy(issue => issue.Severity))
-        {
-            var item = new ListViewItem(issue.Severity == IssueSeverity.Error ? "错误" : "警告");
-            item.SubItems.Add(issue.Path);
-            item.SubItems.Add(issue.Message);
-            item.ForeColor = issue.Severity == IssueSeverity.Error ? Color.Firebrick : Color.DarkGoldenrod;
-            _issuesView.Items.Add(item);
-        }
-        _issuesView.EndUpdate();
+        _issuesView.DataStore = _issues
+            .OrderBy(issue => issue.Severity)
+            .Select(issue => new IssueGridRow
+            {
+                Severity = issue.Severity == IssueSeverity.Error ? "错误" : "警告",
+                Path = issue.Path,
+                Message = issue.Message,
+                IsError = issue.Severity == IssueSeverity.Error,
+            })
+            .ToList();
     }
 
     private void OpenContainingFolder()
@@ -728,19 +761,15 @@ public partial class MainForm : Form
         if (directory is null || !Directory.Exists(directory)) return;
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = directory,
-                UseShellExecute = true,
-            });
+            PlatformShell.OpenDirectory(directory);
         }
         catch (Exception error)
         {
-            MessageBox.Show(this, error.Message, "无法打开目录", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, error.Message, "无法打开目录", MessageBoxButtons.OK, MessageBoxType.Warning);
         }
     }
 
-    private void OnFormClosing(object? sender, FormClosingEventArgs e)
+    private void OnFormClosing(object? sender, CancelEventArgs e)
     {
         if (!IsDirty()) return;
         var answer = MessageBox.Show(
@@ -748,8 +777,8 @@ public partial class MainForm : Form
             "有未保存的修改，确定要放弃并退出吗？",
             "未保存的修改",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
+            MessageBoxType.Warning,
+            MessageBoxDefaultButton.No);
         if (answer != DialogResult.Yes) e.Cancel = true;
     }
 
@@ -763,8 +792,8 @@ public partial class MainForm : Form
             $"当前有未保存的修改，继续{action}将丢弃它们。是否继续？",
             "未保存的修改",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
+            MessageBoxType.Warning,
+            MessageBoxDefaultButton.No);
         return answer == DialogResult.Yes;
     }
 
@@ -791,12 +820,12 @@ public partial class MainForm : Form
     private void UpdateTitle()
     {
         var name = Path.GetFileName(_path);
-        Text = $"{name} — ChatRoom 配置编辑器";
+        Title = $"{name} — ChatRoom 配置编辑器";
     }
 
     private void SetStatus(string message) => _statusLabel.Text = message;
 
-    private static decimal Clamp(int value, decimal min, decimal max) =>
+    private static double Clamp(int value, double min, double max) =>
         Math.Min(Math.Max(value, min), max);
 
     private static string? NullIfBlank(string value)
@@ -805,10 +834,23 @@ public partial class MainForm : Form
         return trimmed.Length == 0 ? null : trimmed;
     }
 
+    private static List<string> ListValues(ListBox list) =>
+        (list.DataStore ?? Enumerable.Empty<object>())
+        .Select(item => item?.ToString() ?? string.Empty)
+        .ToList();
+
+    private static void SetListValues(ListBox list, IEnumerable<string> values, int selectedIndex = -1)
+    {
+        var data = values.ToList();
+        list.DataStore = data;
+        list.SelectedIndex = selectedIndex >= 0 && selectedIndex < data.Count ? selectedIndex : -1;
+    }
+
     private static string SafeDirectory(string path)
     {
         try
         {
+            if (Directory.Exists(path)) return path;
             var directory = Path.GetDirectoryName(path);
             return directory is not null && Directory.Exists(directory)
                 ? directory
@@ -819,4 +861,7 @@ public partial class MainForm : Form
             return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         }
     }
+
+    private static Uri ToDirectoryUri(string directory) =>
+        new(Path.GetFullPath(directory) + Path.DirectorySeparatorChar);
 }

@@ -34,6 +34,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _exitItem = new("退出");
 
     private Process? _process;
+    private readonly Eto.Forms.Application _etoApplication;
     private MainForm? _configForm;
     private DateTime _recentStartUtc;
     private bool _wasRunning;
@@ -48,6 +49,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         EnsureRuntimeFiles();
 
+        // Eto uses the WinForms backend inside the existing tray message loop.
+        _etoApplication = new Eto.Forms.Application(new Eto.WinForms.Platform());
         _settings = new TraySettings(Path.Combine(_appDir, "chatroom-tray.ini"));
         _appIcon = LoadApplicationIcon();
         _trayIcon = new NotifyIcon
@@ -351,24 +354,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         if (_configForm is not null && !_configForm.IsDisposed)
         {
-            if (_configForm.WindowState == FormWindowState.Minimized)
-                _configForm.WindowState = FormWindowState.Normal;
+            if (_configForm.WindowState == Eto.Forms.WindowState.Minimized)
+                _configForm.WindowState = Eto.Forms.WindowState.Normal;
             _configForm.Show();
             _configForm.BringToFront();
-            _configForm.Activate();
+            _configForm.Focus();
             return;
         }
 
         _configForm = new MainForm
         {
-            Icon = (Icon)_appIcon.Clone(),
             ShowInTaskbar = true,
         };
-        _configForm.FormClosed += (_, _) =>
-        {
-            _configForm?.Icon?.Dispose();
-            _configForm = null;
-        };
+        _configForm.Closed += (_, _) => _configForm = null;
         _configForm.Show();
         _configForm.BringToFront();
     }
@@ -441,6 +439,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _menu.Dispose();
+            _etoApplication.Dispose();
             _appIcon.Dispose();
         }
 

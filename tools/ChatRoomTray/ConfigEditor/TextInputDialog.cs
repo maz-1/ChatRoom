@@ -1,66 +1,44 @@
-using System.Drawing;
-using System.Windows.Forms;
+using Eto.Drawing;
+using Eto.Forms;
 
 namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>Minimal single-value prompt used for list entries.</summary>
-public sealed class TextInputDialog : Form
+public sealed class TextInputDialog : Dialog<bool>
 {
     private readonly TextBox _box;
 
     public TextInputDialog(string title, string label, string initial, int clientWidth = 420)
     {
-        Text = title;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MinimizeBox = false;
-        MaximizeBox = false;
+        Title = title;
+        Resizable = false;
         ShowInTaskbar = false;
         ClientSize = new Size(clientWidth, 130);
-        AutoScaleMode = AutoScaleMode.Font;
 
         _box = new TextBox
         {
             Text = initial,
-            Dock = DockStyle.Fill,
         };
 
-        var layout = new TableLayoutPanel
+        var ok = new Button { Text = "确定" };
+        var cancel = new Button { Text = "取消" };
+        ok.Click += (_, _) => Close(true);
+        cancel.Click += (_, _) => Close(false);
+
+        DefaultButton = ok;
+        AbortButton = cancel;
+
+        var layout = new DynamicLayout
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 2,
             Padding = new Padding(12),
+            Spacing = new Size(8, 10),
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label
-        {
-            Text = label,
-            AutoSize = true,
-            Anchor = AnchorStyles.Left,
-            Margin = new Padding(3, 6, 8, 3),
-        }, 0, 0);
-        layout.Controls.Add(_box, 1, 0);
+        layout.AddRow(new Label { Text = label, VerticalAlignment = VerticalAlignment.Center }, _box);
+        layout.Add(null);
+        layout.AddSeparateRow(null, cancel, ok);
 
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            FlowDirection = FlowDirection.RightToLeft,
-            AutoSize = true,
-            Padding = new Padding(12, 0, 12, 12),
-        };
-        var ok = new Button { Text = "确定", AutoSize = true, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "取消", AutoSize = true, DialogResult = DialogResult.Cancel };
-        buttons.Controls.AddRange(new Control[] { ok, cancel });
-
-        Controls.Add(layout);
-        Controls.Add(buttons);
-        AcceptButton = ok;
-        CancelButton = cancel;
+        Content = layout;
     }
 
-    public string Value => _box.Text;
+    public string Value => _box.Text ?? string.Empty;
 }

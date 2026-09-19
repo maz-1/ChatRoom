@@ -1,9 +1,12 @@
 using System;
 using System.Linq;
+using ChatRoomTray.ConfigEditor;
+
+#if NETFRAMEWORK
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
-using ChatRoomTray.ConfigEditor;
+#endif
 
 namespace ChatRoomTray;
 
@@ -11,6 +14,23 @@ internal static class Program
 {
     [STAThread]
     private static int Main(string[] args)
+    {
+#if NETFRAMEWORK
+        return RunWindowsTrayBuild(args);
+#else
+        // On Linux/macOS this same project intentionally contains no tray code.
+        // No arguments (or --config) opens the integrated Eto configuration editor;
+        // the remaining commands are the cross-platform configuration CLI.
+        if (args.Length == 0
+            || args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
+            return ConfigEditorHost.Run();
+
+        return ConfigEditorCommands.Run(args);
+#endif
+    }
+
+#if NETFRAMEWORK
+    private static int RunWindowsTrayBuild(string[] args)
     {
         EnableDpiAwareness();
         Application.EnableVisualStyles();
@@ -22,10 +42,7 @@ internal static class Program
             return ConfigEditorCommands.Run(args);
 
         if (args.Any(arg => string.Equals(arg, "--config", StringComparison.OrdinalIgnoreCase)))
-        {
-            Application.Run(new MainForm());
-            return 0;
-        }
+            return ConfigEditorHost.Run();
 
         if (args.Any(arg => string.Equals(arg, "--help", StringComparison.OrdinalIgnoreCase)
                             || string.Equals(arg, "-h", StringComparison.OrdinalIgnoreCase)))
@@ -79,16 +96,15 @@ internal static class Program
 
     private static void EnableDpiAwareness()
     {
-        // Prefer Per-Monitor V2 on current Windows. The manifest and App.config
-        // declare the same mode; these calls are a runtime fallback for hosts
-        // or deployment paths that do not honor one of those declarations.
         try
         {
             if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return;
         }
+        catch (DllNotFoundException)
+        {
+        }
         catch (EntryPointNotFoundException)
         {
-            // Pre-Windows 10 1607: fall back to the Windows 8.1 API below.
         }
 
         try
@@ -97,20 +113,20 @@ internal static class Program
         }
         catch (DllNotFoundException)
         {
-            // Pre-Windows 8.1: fall back to system-DPI awareness below.
         }
         catch (EntryPointNotFoundException)
         {
-            // Same fallback as above.
         }
 
         try
         {
             SetProcessDPIAware();
         }
+        catch (DllNotFoundException)
+        {
+        }
         catch (EntryPointNotFoundException)
         {
-            // Very old Windows; leave the framework default unchanged.
         }
     }
 
@@ -124,4 +140,5 @@ internal static class Program
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetProcessDPIAware();
+#endif
 }

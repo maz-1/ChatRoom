@@ -77,6 +77,11 @@ public static class ConfigValidator
     public static bool HasErrors(IEnumerable<ValidationIssue> issues) =>
         issues.Any(issue => issue.Severity == IssueSeverity.Error);
 
+    public static bool AuthenticationUsesOwnerToken(ChatRoomConfig config) =>
+        config.Auth.LocalWebAuth
+        || !string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl)
+        || !string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl);
+
     private static void ValidateRoots(ChatRoomConfig config, List<ValidationIssue> issues)
     {
         if (config.AllowedRoots.Count == 0)
@@ -213,14 +218,10 @@ public static class ConfigValidator
                 "server.host",
                 $"绑定到 {host} 时，auth.localWebAuth 必须为 true，否则 ChatRoom 会以 FORBIDDEN 拒绝启动。"));
 
-        var authenticationUsed = config.Auth.LocalWebAuth
-            || !string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl)
-            || !string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl);
-
-        if (authenticationUsed && !ownerTokenPresent)
+        if (AuthenticationUsesOwnerToken(config) && !ownerTokenPresent)
             issues.Add(Error(
                 "ownerToken",
-                "启用了需要认证的入口（localWebAuth / 公网地址），系统凭据管理器中必须存在 ownerToken，否则 ChatRoom 会拒绝启动。"));
+                "启用了需要认证的入口（localWebAuth / 公网地址），系统凭据库中必须存在 ownerToken，否则 ChatRoom 会拒绝启动。"));
     }
 
     private static void ValidateProxy(string proxy, string path, List<ValidationIssue> issues)
