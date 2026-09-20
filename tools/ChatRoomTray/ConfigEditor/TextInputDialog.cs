@@ -13,7 +13,7 @@ public sealed class TextInputDialog : Dialog<bool>
         Title = title;
         Resizable = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(clientWidth, 130);
+        EditorLayout.SizeWindow(this, new Size(clientWidth, 150), new Size(300, 130));
 
         _box = new TextBox
         {

@@ -250,6 +250,8 @@ internal static class ConfigEditorCommands
                         dialogControls.OfType<Button>().Any(button => button.ID == "McpCompleteCommandButton"));
                 }
 
+                EnvironmentVariablesSmoke.Run(Check);
+
                 using (var httpDialog = new McpServerDialog(
                            "remote",
                            new HttpMcpServerConfig
@@ -282,6 +284,10 @@ internal static class ConfigEditorCommands
                     Check("请求头编辑窗口分别输入键和值", labels.Contains("键") && labels.Contains("值"));
                 }
 
+#if WINDOWS_TRAY
+                LayoutSizingSmoke.Run(Check);
+                DialogViewportSmoke.Run(Check);
+#endif
                 using (var completeCommandDialog = new TextInputDialog(
                            "输入完整命令",
                            "完整命令",

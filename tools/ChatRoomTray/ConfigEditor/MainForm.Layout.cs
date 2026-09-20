@@ -75,8 +75,7 @@ public partial class MainForm : Form
     private void BuildUi()
     {
         Title = "ChatRoom 配置编辑器";
-        MinimumSize = new Size(960, 700);
-        ClientSize = new Size(1100, 800);
+        EditorLayout.SizeWindow(this, new Size(1100, 800), new Size(720, 480));
 
         ConfigureLimits();
         BuildTabs();
@@ -349,11 +348,7 @@ public partial class MainForm : Form
 
     private static TabPage WrapTab(string title, Control content)
     {
-        var scroll = new Scrollable
-        {
-            Content = content,
-            ExpandContentWidth = true,
-        };
+        var scroll = EditorLayout.VerticalScroll(content, "ConfigPageScroll");
         return new TabPage
         {
             Text = title,

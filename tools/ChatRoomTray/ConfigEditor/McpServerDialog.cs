@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Eto.Drawing;
 using Eto.Forms;
 
 namespace ChatRoomTray.ConfigEditor;
 
 /// <summary>Adds or edits a single entry under <c>mcp.servers</c>.</summary>
-public sealed class McpServerDialog : Dialog<bool>
+public sealed partial class McpServerDialog : Dialog<bool>
 {
     private readonly TextBox _nameBox = new();
     private readonly DropDown _typeBox = new() { Width = 140 };
 
-    private readonly TextBox _commandBox = new() { ID = "McpCommandBox", Width = 500 };
+    private readonly TextBox _commandBox = new() { ID = "McpCommandBox" };
     private readonly Button _completeCommandButton = new()
     {
         ID = "McpCompleteCommandButton",
@@ -22,8 +21,7 @@ public sealed class McpServerDialog : Dialog<bool>
     private readonly ListBox _argsList = new()
     {
         ID = "McpArgsList",
-        Width = 500,
-        Height = 110,
+        Height = 48, // Compact initial size; RefreshArguments accounts for row count.
     };
     private readonly List<string> _arguments = new();
     private readonly Button _argNewButton = new() { Text = "新建" };
@@ -31,32 +29,30 @@ public sealed class McpServerDialog : Dialog<bool>
     private readonly Button _argDeleteButton = new() { Text = "删除" };
     private readonly Button _argUpButton = new() { Text = "上移" };
     private readonly Button _argDownButton = new() { Text = "下移" };
-    private readonly TextArea _envBox = new() { Width = 580, Height = 80 };
-    private readonly TextBox _cwdBox = new() { Width = 500 };
+    private readonly TextBox _cwdBox = new() { ID = "McpWorkingDirectoryBox" };
 
-    private readonly TextBox _urlBox = new() { Width = 580 };
+    private readonly TextBox _urlBox = new();
     private readonly GridView _headersList = new()
     {
         ID = "McpHeadersList",
         AllowMultipleSelection = false,
         ShowHeader = true,
-        Width = 420,
-        Height = 130,
+        Height = 160,
     };
     private readonly List<HeaderRow> _headers = new();
     private readonly Button _headerNewButton = new() { Text = "添加" };
     private readonly Button _headerEditButton = new() { Text = "编辑" };
     private readonly Button _headerDeleteButton = new() { Text = "删除" };
     private readonly Button _authTokenButton = new() { Text = "填写 Auth Token…" };
-    private readonly TextBox _proxyBox = new() { Width = 580 };
+    private readonly TextBox _proxyBox = new();
 
-    private readonly Panel _transportPanel = new() { Width = 700 };
+    private readonly Panel _transportPanel = new();
     private readonly DynamicLayout _stdioPanel;
     private readonly DynamicLayout _httpPanel;
     private readonly Label _errorLabel = new()
     {
         TextColor = Colors.Firebrick,
-        Height = 40,
+        Visible = false,
         Wrap = WrapMode.Word,
     };
 
@@ -72,7 +68,7 @@ public sealed class McpServerDialog : Dialog<bool>
         _takenNames = takenNames;
 
         Title = originalName is null ? "添加 MCP 服务" : $"编辑 MCP 服务：{originalName}";
-        MinimumSize = new Size(680, 540);
+        EditorLayout.SizeWindow(this, new Size(760, 620), new Size(600, 400));
         AutoSize = false;
         Resizable = true;
         ShowInTaskbar = false;
@@ -93,19 +89,31 @@ public sealed class McpServerDialog : Dialog<bool>
             Padding = new Padding(12),
             Spacing = new Size(8, 8),
         };
-        AddField(fields, "名称", _nameBox);
-        AddField(fields, "传输方式", _typeBox);
-        fields.Add(_transportPanel);
-        fields.AddRow(_errorLabel);
-        fields.Add(null, yscale: true);
-        fields.AddSeparateRow(null, cancel, ok);
-        Content = fields;
+        var identity = new DynamicLayout { Spacing = new Size(8, 8) };
+        AddField(identity, "名称", _nameBox);
+        AddField(identity, "传输方式", _typeBox);
+        fields.Add(identity, xscale: true);
+        fields.Add(_transportPanel, xscale: true, yscale: true);
+
+        var footer = new DynamicLayout
+        {
+            ID = "McpDialogFooter",
+            Padding = new Padding(12, 4, 12, 12),
+            Spacing = new Size(8, 8),
+        };
+        footer.AddRow(_errorLabel);
+        footer.AddSeparateRow(null, cancel, ok);
+        var root = new DynamicLayout();
+        var scroll = EditorLayout.VerticalScroll(fields, "McpDialogScroll");
+        scroll.ExpandContentHeight = true;
+        root.Add(scroll, yscale: true);
+        root.AddRow(footer);
+        Content = root;
 
         _typeBox.SelectedIndexChanged += (_, _) => ApplyTypeVisibility();
-        _nameBox.TextChanged += (_, _) => _errorLabel.Text = string.Empty;
+        _nameBox.TextChanged += (_, _) => Reject(string.Empty);
 
         LoadFrom(server);
-        Size = new Size(680, 540);
     }
 
     public string ServerName { get; private set; } = string.Empty;
@@ -123,7 +131,7 @@ public sealed class McpServerDialog : Dialog<bool>
                 _arguments.Clear();
                 _arguments.AddRange(stdio.Args);
                 RefreshArguments();
-                _envBox.Text = FormatPairs(stdio.Env, "=");
+                LoadEnvironmentVariables(stdio.Env);
                 _cwdBox.Text = stdio.Cwd ?? string.Empty;
                 break;
 
@@ -181,7 +189,7 @@ public sealed class McpServerDialog : Dialog<bool>
                 return;
             }
 
-            if (!TryParsePairs(_envBox.Text ?? string.Empty, '=', out var env, out var envError))
+            if (!TryCollectEnvironmentVariables(out var env, out var envError))
             {
                 Reject($"环境变量格式有误：{envError}");
                 return;
@@ -223,7 +231,11 @@ public sealed class McpServerDialog : Dialog<bool>
         Close(true);
     }
 
-    private void Reject(string message) => _errorLabel.Text = message;
+    private void Reject(string message)
+    {
+        _errorLabel.Text = message;
+        _errorLabel.Visible = !string.IsNullOrEmpty(message);
+    }
 
     private DynamicLayout BuildStdioPanel()
     {
@@ -239,12 +251,18 @@ public sealed class McpServerDialog : Dialog<bool>
                 _cwdBox.Text = dialog.Directory;
         };
 
-        var cwdRow = Horizontal(_cwdBox, browse);
+        var cwdRow = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Items = { new StackLayoutItem(_cwdBox, true), new StackLayoutItem(browse, false) },
+        };
 
         var table = NewFieldLayout();
         AddField(table, "命令", BuildCommandEditor());
         AddField(table, "参数", BuildArgsEditor(), grow: true);
-        AddField(table, "环境变量", _envBox, grow: true);
+        AddField(table, "环境变量", BuildEnvironmentEditor(), grow: true, stretch: true);
         AddField(table, "工作目录", cwdRow);
         return table;
     }
@@ -289,7 +307,7 @@ public sealed class McpServerDialog : Dialog<bool>
         _arguments.Clear();
         _arguments.AddRange(arguments);
         RefreshArguments();
-        _errorLabel.Text = string.Empty;
+        Reject(string.Empty);
         _commandBox.Focus();
     }
 
@@ -331,15 +349,9 @@ public sealed class McpServerDialog : Dialog<bool>
             }
         };
 
-        var layout = new StackLayout
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-        };
-        layout.Items.Add(new StackLayoutItem(_argsList, true));
-        layout.Items.Add(new StackLayoutItem(
-            Vertical(_argNewButton, _argEditButton, _argDeleteButton, _argUpButton, _argDownButton),
-            false));
+        var layout = new DynamicLayout { Spacing = new Size(6, 6) };
+        layout.AddRow(_argsList);
+        layout.AddRow(Horizontal(_argNewButton, _argEditButton, _argDeleteButton, _argUpButton, _argDownButton));
         UpdateArgumentButtons();
         return layout;
     }
@@ -393,6 +405,26 @@ public sealed class McpServerDialog : Dialog<bool>
     private void RefreshArguments(int selectedIndex = -1)
     {
         _argsList.DataStore = _arguments.ToList();
+        // Do not let an empty/small argument list consume half the dialog. Longer
+        // argument lists scroll internally; the environment table gets free height.
+        var rowHeight = (int)Math.Ceiling(_argsList.Font.LineHeight) + 4;
+#if WINDOWS_TRAY
+        var nativeList = _argsList.ControlObject as System.Windows.Forms.ListBox;
+        if (nativeList is not null)
+        {
+            rowHeight = nativeList.ItemHeight;
+            nativeList.MaximumSize = System.Drawing.Size.Empty;
+            nativeList.IntegralHeight = false;
+        }
+#endif
+        var height = Math.Max(48, rowHeight * Math.Clamp(_arguments.Count, 1, 3) + 4);
+        _argsList.Height = height;
+#if WINDOWS_TRAY
+        // WinForms ListBox.GetPreferredSize grows with item count even when Eto
+        // Height is set. Cap only height; leave width free to follow the dialog.
+        if (nativeList is not null)
+            nativeList.MaximumSize = new System.Drawing.Size(0, height);
+#endif
         _argsList.SelectedIndex =
             selectedIndex >= 0 && selectedIndex < _arguments.Count ? selectedIndex : -1;
         UpdateArgumentButtons();
@@ -419,10 +451,9 @@ public sealed class McpServerDialog : Dialog<bool>
         _headersList.Columns.Add(new GridColumn
         {
             HeaderText = "值",
-            Width = 260,
+            AutoSize = false,
             Expand = true,
-            MinWidth = 200,
-            MaxWidth = 300,
+            MinWidth = 160,
             DataCell = new TextBoxCell { Binding = Binding.Property<HeaderRow, string>(row => row.Value) },
         });
 
@@ -460,15 +491,9 @@ public sealed class McpServerDialog : Dialog<bool>
             }
         };
 
-        var layout = new StackLayout
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-        };
-        layout.Items.Add(new StackLayoutItem(_headersList, true));
-        layout.Items.Add(new StackLayoutItem(
-            Vertical(_headerNewButton, _headerEditButton, _headerDeleteButton, _authTokenButton),
-            false));
+        var layout = new DynamicLayout { Spacing = new Size(6, 6) };
+        layout.Add(_headersList, yscale: true);
+        layout.AddRow(Horizontal(_headerNewButton, _headerEditButton, _headerDeleteButton, _authTokenButton));
         UpdateHeaderButtons();
         return layout;
     }
@@ -494,7 +519,7 @@ public sealed class McpServerDialog : Dialog<bool>
 
         _headers.Add(new HeaderRow { Key = dialog.HeaderKey, Value = dialog.HeaderValue });
         RefreshHeaders(_headers.Count - 1);
-        _errorLabel.Text = string.Empty;
+        Reject(string.Empty);
     }
 
     private void EditHeader()
@@ -516,7 +541,7 @@ public sealed class McpServerDialog : Dialog<bool>
         item.Key = dialog.HeaderKey;
         item.Value = dialog.HeaderValue;
         RefreshHeaders(index);
-        _errorLabel.Text = string.Empty;
+        Reject(string.Empty);
     }
 
     private void DeleteHeader()
@@ -563,7 +588,7 @@ public sealed class McpServerDialog : Dialog<bool>
         }
 
         RefreshHeaders(index);
-        _errorLabel.Text = string.Empty;
+        Reject(string.Empty);
     }
 
     private int FindHeaderIndex(string key, int exceptIndex = -1)
@@ -628,7 +653,7 @@ public sealed class McpServerDialog : Dialog<bool>
     {
         var table = NewFieldLayout();
         AddField(table, "URL", _urlBox);
-        AddField(table, "请求头", BuildHeadersEditor(), grow: true);
+        AddField(table, "请求头", BuildHeadersEditor(), grow: true, stretch: true);
         AddField(table, "代理", _proxyBox);
         return table;
     }
@@ -639,17 +664,14 @@ public sealed class McpServerDialog : Dialog<bool>
         Spacing = new Size(8, 8),
     };
 
-    private static void AddField(DynamicLayout table, string label, Control control, bool grow = false)
+    private static void AddField(DynamicLayout table, string label, Control control, bool grow = false, bool stretch = false)
     {
-        var row = new StackLayout
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalContentAlignment = grow ? VerticalAlignment.Top : VerticalAlignment.Center,
-        };
-        row.Items.Add(new StackLayoutItem(FieldLabel(label), false));
-        row.Items.Add(new StackLayoutItem(control, true));
-        table.AddRow(row);
+        var caption = FieldLabel(label);
+        caption.VerticalAlignment = grow ? VerticalAlignment.Top : VerticalAlignment.Center;
+        table.BeginHorizontal(yscale: stretch);
+        table.Add(caption, xscale: false);
+        table.Add(control, xscale: true);
+        table.EndHorizontal();
     }
 
     private static Label FieldLabel(string text) => new()
@@ -672,67 +694,11 @@ public sealed class McpServerDialog : Dialog<bool>
         return layout;
     }
 
-    private static StackLayout Vertical(params Control[] controls)
-    {
-        var layout = new StackLayout
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 6,
-        };
-        foreach (var control in controls)
-            layout.Items.Add(new StackLayoutItem(control, false));
-        return layout;
-    }
-
     private static string DirectoryOrHome(string? path)
     {
         var value = path ?? string.Empty;
         if (System.IO.Directory.Exists(value)) return value;
         return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    }
-
-    private static string FormatPairs(Dictionary<string, string> pairs, string separator)
-    {
-        var builder = new StringBuilder();
-        foreach (var pair in pairs)
-            builder.AppendLine(pair.Key + separator + pair.Value);
-        return builder.ToString();
-    }
-
-    private static bool TryParsePairs(
-        string text,
-        char separator,
-        out Dictionary<string, string> pairs,
-        out string error)
-    {
-        pairs = new Dictionary<string, string>(StringComparer.Ordinal);
-        error = string.Empty;
-
-        var lines = text.Split('\n');
-        for (var index = 0; index < lines.Length; index++)
-        {
-            var line = lines[index].TrimEnd('\r');
-            if (line.Trim().Length == 0) continue;
-
-            var at = line.IndexOf(separator);
-            if (at <= 0)
-            {
-                error = $"第 {index + 1} 行缺少“{separator}”：{line.Trim()}";
-                return false;
-            }
-
-            var key = line.Substring(0, at).Trim();
-            var value = line.Substring(at + 1).TrimStart();
-            if (key.Length == 0)
-            {
-                error = $"第 {index + 1} 行的名称为空。";
-                return false;
-            }
-
-            pairs[key] = value;
-        }
-
-        return true;
     }
 
     private static string? NullIfBlank(string value)

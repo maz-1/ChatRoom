@@ -24,7 +24,7 @@ public sealed class HeaderInputDialog : Dialog<bool>
         Title = title;
         Resizable = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(520, 185);
+        EditorLayout.SizeWindow(this, new Size(520, 210), new Size(360, 185));
 
         _keyBox = new TextBox { Text = key };
         _valueBox = new TextBox { Text = value };
