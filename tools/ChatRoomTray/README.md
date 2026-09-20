@@ -12,6 +12,12 @@ ChatRoomTray is the integrated desktop host for ChatRoom. The configuration edit
 
 Linux deliberately does **not** rely on legacy `Gtk.StatusIcon` as the primary tray implementation.
 
+### Windows: DPI awareness
+
+The Windows entry point calls `ApplicationConfiguration.Initialize()` before dispatching to the tray, configuration editor, or command handlers. This applies the project's `ApplicationHighDpiMode=PerMonitorV2` setting before any UI is created; `EnableVisualStyles()` alone does not apply it.
+
+Keep the DPI mode in the project file rather than duplicating it in `app.manifest`. Run `ChatRoomTray.exe --selftest` to verify that the effective Windows DPI mode is `PerMonitorV2`.
+
 ### Linux: KDE and GNOME
 
 The Linux backend dynamically loads one of:

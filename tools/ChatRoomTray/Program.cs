@@ -31,8 +31,8 @@ internal static class Program
 #if WINDOWS_TRAY
     private static int RunWindowsTrayBuild(string[] args)
     {
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
+        // Apply project-level settings (including PerMonitorV2) before any UI is created.
+        ApplicationConfiguration.Initialize();
 
         if (args.Length > 0
             && (!args[0].StartsWith("-", StringComparison.Ordinal)

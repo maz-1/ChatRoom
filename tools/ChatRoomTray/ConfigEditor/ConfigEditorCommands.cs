@@ -416,6 +416,14 @@ internal static class ConfigEditorCommands
             if (!ok) failed++;
         }
 
+#if WINDOWS_TRAY
+        var dpiMode = System.Windows.Forms.Application.HighDpiMode;
+        Check(
+            "Windows 启动时启用 PerMonitorV2 DPI awareness",
+            dpiMode == System.Windows.Forms.HighDpiMode.PerMonitorV2,
+            $"实际 DPI 模式：{dpiMode}");
+#endif
+
         // Decisive source-encoding check: the literal must equal the same text
         // written with escapes, which is immune to how the file gets decoded.
         Check("源码中文编码", "中文" == "\u4e2d\u6587");
