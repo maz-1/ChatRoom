@@ -62,6 +62,14 @@ dotnet build -c Release
 
 Visual Studio profile `win-x64-single-file` publishes a framework-dependent single EXE (about 3 MiB in the current build). The target PC must have Microsoft .NET 8 Desktop Runtime x64 installed.
 
+Open `ChatRoomTray.sln`, right-click the **ChatRoomTray** project, choose **Publish**, and select **win-x64-single-file**. The profile is stored at `Properties/PublishProfiles/win-x64-single-file.pubxml`; the output folder `bin/Release/publish/win-x64-single-file/` contains the executable, not the profile. After updating the profile externally, close and reopen the Publish page or reload the project. A local `.csproj.user` file must not keep `_LastSelectedProfileId` pointing to a deleted `FolderProfile.pubxml`.
+
+The profile includes Visual Studio's folder-target metadata (`PublishProtocol=FileSystem`, `_TargetId=Folder`) and matching `PublishUrl` (Visual Studio) / `PublishDir` (CLI) destinations. Keep these settings when changing the profile. From the project directory, the equivalent command is:
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained false -p:PublishProfile=win-x64-single-file
+```
+
 For a self-contained single-file Windows package, use the .NET 8 publisher:
 
 ```powershell
