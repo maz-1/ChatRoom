@@ -211,6 +211,25 @@ internal static class ConfigEditorCommands
                     && serverView.Columns.Any(column => column.HeaderText == "名称")
                     && serverView.Columns.Any(column => column.HeaderText == "传输")
                     && serverView.Columns.Any(column => column.HeaderText == "目标"));
+                Check(
+                    "MCP 服务列宽模式不冲突",
+                    serverView is not null
+                    && serverView.Columns.All(column => !column.Expand || !column.AutoSize));
+#if WINDOWS_TRAY
+                if (serverView is not null)
+                {
+                    try
+                    {
+                        GridRenderingSmoke.Verify(serverView);
+                        Check("MCP 服务六行首次绘制、重绘和调整宽度", true);
+                    }
+                    catch (Exception error)
+                    {
+                        Check("MCP 服务六行首次绘制、重绘和调整宽度", false,
+                            error.GetBaseException().Message);
+                    }
+                }
+#endif
 
                 using (var stdioDialog = new McpServerDialog(
                            "local",

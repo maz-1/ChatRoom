@@ -159,6 +159,8 @@ public partial class MainForm : Form
         _serversView.Columns.Add(new GridColumn
         {
             HeaderText = "目标",
+            // Eto WinForms must not call AutoResizeColumn(Fill) after the first row paints.
+            AutoSize = false,
             Expand = true,
             MinWidth = 320,
             DataCell = new TextBoxCell { Binding = Binding.Property<ServerGridRow, string>(row => row.Target) },
