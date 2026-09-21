@@ -121,8 +121,13 @@ public partial class MainForm : Form
             Orientation = Orientation.Vertical,
             Panel1 = _tabs,
             Panel2 = issuesGroup,
-            Position = 560,
+            ID = "ConfigResultsSplitter",
             FixedPanel = SplitterFixedPanel.Panel2,
+            // With Panel2 fixed, RelativePosition is its height (not a ratio).
+            // An absolute Position calculated before layout can pin Panel2 to zero.
+            RelativePosition = 220,
+            Panel1MinimumSize = 100,
+            Panel2MinimumSize = 180,
         };
 
         var root = new DynamicLayout
@@ -185,7 +190,10 @@ public partial class MainForm : Form
         _issuesView.Columns.Add(new GridColumn
         {
             HeaderText = "说明",
-            AutoSize = true,
+            // Fill the remaining width even when validation returns no rows.
+            AutoSize = false,
+            Expand = true,
+            MinWidth = 240,
             DataCell = new TextBoxCell { Binding = Binding.Property<IssueGridRow, string>(row => row.Message) },
         });
         _issuesView.CellFormatting += (_, e) =>

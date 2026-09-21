@@ -72,6 +72,11 @@ internal static class LayoutSizingSmoke
                 null, new[] { typeof(bool) }, null)!.Invoke(native, new object[] { true });
             typeof(WF.Form).GetMethod("OnLoad", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(native, new object[] { EventArgs.Empty });
+            if (window is MainForm initialForm)
+            {
+                for (var pass = 0; pass < 3; pass++) Layout(native);
+                ValidationPaneSmoke.VerifyVisible(initialForm);
+            }
             window.MinimumSize = new Size(100, 100);
 
             foreach (var size in new[] { regular, compact, regular })
@@ -112,6 +117,7 @@ internal static class LayoutSizingSmoke
 
     private static void Validate(Window window, WF.Form native)
     {
+        if (window is MainForm mainForm) ValidationPaneSmoke.VerifyVisible(mainForm);
         foreach (var child in Walk(window, allTabs: false))
         {
             if (child.ControlObject is not WF.Control control) continue;

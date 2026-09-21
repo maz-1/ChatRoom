@@ -231,6 +231,31 @@ internal static class ConfigEditorCommands
                 }
 #endif
 
+                var issuesView = controls.OfType<GridView>()
+                    .FirstOrDefault(view => view.ID == "ValidationIssuesView");
+                var messageColumn = issuesView?.Columns.LastOrDefault();
+                Check(
+                    "校验结果说明列填充剩余宽度且列宽模式不冲突",
+                    messageColumn is not null
+                    && messageColumn.HeaderText == "说明"
+                    && messageColumn.Expand && !messageColumn.AutoSize);
+#if WINDOWS_TRAY
+                if (issuesView is not null)
+                {
+                    try
+                    {
+                        GridRenderingSmoke.Verify(issuesView, rowCount: 0);
+                        GridRenderingSmoke.Verify(issuesView);
+                        Check("校验结果空列表、六行首绘、缩放和清空后说明列填满", true);
+                    }
+                    catch (Exception error)
+                    {
+                        Check("校验结果空列表、六行首绘、缩放和清空后说明列填满", false,
+                            error.GetBaseException().Message);
+                    }
+                }
+#endif
+
                 using (var stdioDialog = new McpServerDialog(
                            "local",
                            new StdioMcpServerConfig
@@ -287,6 +312,7 @@ internal static class ConfigEditorCommands
 #if WINDOWS_TRAY
                 LayoutSizingSmoke.Run(Check);
                 DialogViewportSmoke.Run(Check);
+                ValidationPaneSmoke.Run(Check);
 #endif
                 using (var completeCommandDialog = new TextInputDialog(
                            "输入完整命令",

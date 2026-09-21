@@ -12,9 +12,8 @@ namespace ChatRoomTray.ConfigEditor;
 /// <summary>Exercises the native grid paint path without opening a window.</summary>
 internal static class GridRenderingSmoke
 {
-    public static void Verify(GridView template)
+    public static void Verify(GridView template, int rowCount = 6)
     {
-        const int rowCount = 6;
         using var view = new GridView { ShowHeader = true };
         for (var index = 0; index < template.Columns.Count; index++)
         {
@@ -81,9 +80,29 @@ internal static class GridRenderingSmoke
             }
         }
 
-        Paint(920);  // First paint, before any selection/click.
-        Paint(920);  // Repaint, as when returning to the tab.
-        Paint(1120); // Resize must retain fill sizing and paint all rows.
+        void VerifyFill(int width)
+        {
+            Paint(width);
+            var lastIndex = grid.Columns.Count - 1;
+            if (lastIndex < 0 || !template.Columns[lastIndex].Expand) return;
+
+            // Check actual geometry, not just the Fill flag. The header exists even
+            // for an empty result list, before any row has ever been painted.
+            var right = grid.GetCellDisplayRectangle(lastIndex, -1, false).Right;
+            if (Math.Abs(right - grid.ClientRectangle.Right) > 2)
+                throw new InvalidOperationException(
+                    $"The last column does not fill the grid: right={right}, viewport={grid.ClientRectangle.Right}.");
+        }
+
+        VerifyFill(842);  // Screenshot-sized grid, including initially empty results.
+        VerifyFill(842);  // Repaint, as when returning to the tab.
+        VerifyFill(1120); // Widen the grid.
+        VerifyFill(600);  // Narrow the grid.
+        VerifyFill(842);  // Restore the original size.
+        view.DataStore = Array.Empty<object>();
+        rowCount = 0;
+        VerifyFill(842);  // Clearing validation results must not collapse the column.
+        VerifyFill(1120);
     }
 }
 #endif
