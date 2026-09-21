@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import type { AuthInfo } from "@modelcontextprotocol/server";
-import type { AuthService } from "../../auth/auth-service.js";
-import type { McpOAuthClientContext } from "../../mcp/server/request-context.js";
+import type { AuthService } from "#auth/auth-service";
+import type { McpOAuthClientContext } from "#mcp/server/request-context";
 
 export function oauthClientContextForRequest(
   req: Request,

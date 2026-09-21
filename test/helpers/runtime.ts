@@ -2,6 +2,8 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ChatRoomConfig } from "../../src/config/types.js";
+import { FileLogStore } from "../../src/infrastructure/logging/file-log-store.js";
+import { SystemLog } from "../../src/infrastructure/logging/system-log.js";
 import {
   createApplication,
   type ApplicationComponents,
@@ -58,7 +60,8 @@ export async function createTestRuntime(
     },
   };
   options.configure?.(config);
-  const components = await createApplication(config, {
+  const logs = new SystemLog(new FileLogStore(dataDir));
+  const components = await createApplication(config, logs, {
     ownerToken: "test-owner-token",
   });
   return {
@@ -72,7 +75,7 @@ export async function createTestRuntime(
       try {
         components.database.close();
       } catch {}
-      await components.logger.flush().catch(() => undefined);
+      await components.logs.flush().catch(() => undefined);
       await rm(root, { recursive: true, force: true });
     },
   };

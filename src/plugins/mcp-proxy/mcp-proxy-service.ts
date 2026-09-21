@@ -8,16 +8,16 @@ import {
 } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import type { Readable } from "node:stream";
-import type { McpConfig, McpServerConfig } from "../../config/types.js";
-import { ChatRoomError } from "../../core/errors/chatroom-error.js";
-import { childEnvironment } from "../../core/runtime/child-environment.js";
+import type { McpConfig, McpServerConfig } from "#config/types";
+import { ChatRoomError } from "#core/errors/chatroom-error";
+import { childEnvironment } from "#core/runtime/child-environment";
 import {
   CHATROOM_NAME,
   CHATROOM_VERSION,
-} from "../../core/runtime/identity.js";
-import { createProxyDispatcher } from "../../core/runtime/proxy-dispatcher.js";
+} from "#core/runtime/identity";
+import { createProxyDispatcher } from "#core/runtime/proxy-dispatcher";
 import { fetch as undiciFetch, type Dispatcher } from "undici";
-import type { RuntimeEventBus } from "../../app/event-bus.js";
+import type { RuntimeEventBus } from "#app/event-bus";
 import type {
   McpCallInput,
   McpCallOutput,

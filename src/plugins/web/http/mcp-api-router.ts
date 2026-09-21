@@ -1,10 +1,10 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { ChatRoomError } from "../../../core/errors/chatroom-error.js";
-import type { OperationLog } from "../../../operations/operation-log.js";
-import { asyncRoute } from "../../../presentation/http/http-utils.js";
-import type { McpProxyService } from "../../mcp-proxy/mcp-proxy-service.js";
-import type { McpServerDetail } from "../../mcp-proxy/types.js";
+import { ChatRoomError } from "#core/errors/chatroom-error";
+import type { OperationLog } from "#operations/operation-log";
+import { asyncRoute } from "#presentation/http/http-utils";
+import type { McpProxyService } from "#plugins/mcp-proxy/mcp-proxy-service";
+import type { McpServerDetail } from "#plugins/mcp-proxy/types";
 
 export interface McpServersPayload {
   configPath: string;

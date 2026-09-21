@@ -200,9 +200,13 @@ test("MCP server enabled state survives an application restart", async () => {
     await runtime.components.plugins.stop();
     runtime.components.database.close();
 
-    restarted = await createApplication(runtime.config, {
-      ownerToken: "test-owner-token",
-    });
+    restarted = await createApplication(
+      runtime.config,
+      runtime.components.logs,
+      {
+        ownerToken: "test-owner-token",
+      },
+    );
     const restored = (await restarted.mcpProxy.inspect("local")).servers[0];
     assert.equal(restored?.enabled, false);
     assert.equal(restored?.status, "disabled");

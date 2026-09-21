@@ -1,8 +1,8 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import type { AuthService } from "../../../auth/auth-service.js";
-import { ChatRoomError } from "../../../core/errors/chatroom-error.js";
-import { bodyRecord } from "../../../presentation/http/http-utils.js";
+import type { AuthService } from "#auth/auth-service";
+import { ChatRoomError } from "#core/errors/chatroom-error";
+import { bodyRecord } from "#presentation/http/http-utils";
 
 export function createOAuthClientsApiRouter(auth: AuthService): ExpressRouter {
   const router = Router();

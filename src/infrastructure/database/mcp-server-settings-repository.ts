@@ -1,4 +1,4 @@
-import type { McpServerSettingStore } from "../../plugins/mcp-proxy/mcp-proxy-service.js";
+import type { McpServerSettingStore } from "#plugins/mcp-proxy/mcp-proxy-service";
 import type { AppDatabase } from "./app-database.js";
 
 export class McpServerSettingsRepository implements McpServerSettingStore {

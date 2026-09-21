@@ -11,6 +11,14 @@ const webRoot = resolve(projectRoot, "src/plugins/web/ui");
 
 export default defineConfig({
   plugins: [vue(), vuetify({ autoImport: true })],
+  resolve: {
+    conditions: [
+      "chatroom-source",
+      "module",
+      "browser",
+      "development|production",
+    ],
+  },
   root: webRoot,
   publicDir: false,
   build: {

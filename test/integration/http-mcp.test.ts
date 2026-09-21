@@ -8,7 +8,7 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
-import type { SystemLogRecord } from "../../src/core/logging/types.js";
+import type { LogRecord } from "../../src/core/logging/types.js";
 import { OAuthRepository } from "../../src/infrastructure/database/oauth-repository.js";
 import { createTestRuntime } from "../helpers/runtime.js";
 
@@ -205,6 +205,17 @@ test("remote WebUI mutations require same-origin while loopback WebUI stays loca
     });
     assert.equal(rejected.status, 403);
 
+    const invalidBody = await requestWithHost(address.port, "/api/auth/login", {
+      method: "POST",
+      host: "chatroom.example.com",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://chatroom.example.com",
+      },
+      body: "null",
+    });
+    assert.equal(invalidBody.status, 400);
+
     const accepted = await requestWithHost(address.port, "/api/auth/login", {
       method: "POST",
       host: "chatroom.example.com",
@@ -275,8 +286,8 @@ test("OAuth client registration logs accepted and rejected remote requests", asy
       config.auth.mcpPublicBaseUrl = "https://mcp.example.com";
     },
   });
-  const registrationLogs: SystemLogRecord[] = [];
-  const unsubscribeLogs = runtime.components.logger.subscribe((record) => {
+  const registrationLogs: LogRecord[] = [];
+  const unsubscribeLogs = runtime.components.logs.subscribe((record) => {
     if (
       record.event === "oauth.registration_accepted" ||
       record.event === "oauth.registration_rejected"
@@ -361,7 +372,7 @@ test("OAuth client registration logs accepted and rejected remote requests", asy
     assert.equal(rejectedDetails.error, "FORBIDDEN");
     assert.equal(
       rejectedDetails.errorDescription,
-      "OAuth redirects must use HTTPS unless loopback",
+      "OAuth redirects must use HTTPS unless using loopback HTTP",
     );
     assert.match(String(rejectedDetails.timestamp), /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(typeof rejectedDetails.sourceAddress, "string");

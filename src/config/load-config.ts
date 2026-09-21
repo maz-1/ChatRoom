@@ -2,12 +2,12 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
-import { ChatRoomError } from "../core/errors/chatroom-error.js";
+import { ChatRoomError } from "#core/errors/chatroom-error";
 import {
   generateOwnerToken,
   systemOwnerTokenStore,
   type OwnerTokenStore,
-} from "../infrastructure/security/owner-token-store.js";
+} from "#infrastructure/security/owner-token-store";
 import { platformPaths } from "./platform-paths.js";
 import type { ChatRoomConfig } from "./types.js";
 
@@ -413,6 +413,9 @@ function serverEntries(value: unknown): Record<string, unknown> {
 }
 
 function validateRuntimeSecurity(config: ChatRoomConfig): void {
+  validatePublicBaseUrl(config.auth.mcpPublicBaseUrl, "auth.mcpPublicBaseUrl");
+  validatePublicBaseUrl(config.auth.webPublicBaseUrl, "auth.webPublicBaseUrl");
+
   const loopback =
     config.server.host === "127.0.0.1" ||
     config.server.host === "::1" ||
@@ -440,5 +443,23 @@ function validateOwnerTokenAvailability(
     throw new ChatRoomError(
       "INVALID_INPUT",
       "An owner token is required in the system keychain when any authenticated ingress is configured",
+    );
+}
+
+function validatePublicBaseUrl(value: string | null, name: string): void {
+  if (!value) return;
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:")
+    throw new ChatRoomError("INVALID_INPUT", name + " must use HTTP or HTTPS");
+  if (
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new ChatRoomError(
+      "INVALID_INPUT",
+      name + " must be an origin without credentials, path, query, or fragment",
     );
 }

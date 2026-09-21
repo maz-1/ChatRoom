@@ -1,5 +1,5 @@
-import { ChatRoomError } from "../../core/errors/chatroom-error.js";
-import { createProxyDispatcher } from "../../core/runtime/proxy-dispatcher.js";
+import { ChatRoomError } from "#core/errors/chatroom-error";
+import { createProxyDispatcher } from "#core/runtime/proxy-dispatcher";
 import type { HttpRequestInput, HttpResponse } from "./types.js";
 import {
   fetch,

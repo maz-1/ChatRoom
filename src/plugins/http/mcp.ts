@@ -1,5 +1,5 @@
-import type { PluginMcpRegistrar } from "../../mcp/server/plugin-mcp-registrar.js";
-import { openWorldMutation } from "../../mcp/server/tool-support.js";
+import type { PluginMcpRegistrar } from "#mcp/server/plugin-mcp-registrar";
+import { openWorldMutation } from "#mcp/server/tool-support";
 import type { HttpFetcher } from "./http-fetcher.js";
 import { httpRequestSchema, httpRequestResultSchema } from "./types.js";
 

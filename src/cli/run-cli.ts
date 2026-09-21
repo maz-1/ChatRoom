@@ -1,6 +1,6 @@
-import { initializeConfig, loadRuntimeConfig } from "../config/load-config.js";
-import { ApplicationLifecycle } from "../app/lifecycle.js";
-import { ChatRoomError } from "../core/errors/chatroom-error.js";
+import { initializeConfig, loadRuntimeConfig } from "#config/load-config";
+import { ApplicationLifecycle } from "#app/lifecycle";
+import { ChatRoomError } from "#core/errors/chatroom-error";
 
 export async function runChatRoomCli(
   argv: string[] = process.argv.slice(2),

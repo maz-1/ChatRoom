@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
-import { ChatRoomError } from "../../core/errors/chatroom-error.js";
-import { platformSecurityDefaults } from "../../config/platform-paths.js";
+import { ChatRoomError } from "#core/errors/chatroom-error";
+import { platformSecurityDefaults } from "#config/platform-paths";
 
 const SERVICE = "ChatRoom";
 const VERSION = "owner-token:v1";
