@@ -276,7 +276,7 @@ export const enChatRoom = {
     block: "Hide current workspace",
     blacklist: "Blacklist",
     blacklistHelp:
-      "Blocked workspaces are hidden from the workspace list for all browsers. Files are kept and can still be accessed by path. Restore a workspace to show it again.",
+      "Blocked workspaces are hidden from the workspace list for all browsers and cannot be read through workspace_info. Files are kept. Restore a workspace to show it and allow reading its workspace information again.",
     blacklistEmpty: "No blocked workspaces.",
     restore: "Restore",
     createTitle: "New workspace",

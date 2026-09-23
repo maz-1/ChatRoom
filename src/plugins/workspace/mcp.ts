@@ -27,7 +27,7 @@ export function registerWorkspaceTools(
     {
       title: "Workspace info",
       description:
-        "Read the complete workspace context for a project, including its summary, preset prompt, project instructions, and skill metadata.",
+        "Read the complete workspace context for a project, including its summary, preset prompt, project instructions, and skill metadata. Workspaces on the blacklist cannot be read.",
       inputSchema: z.object({ root: z.string() }),
       outputSchema: workspaceInfoSchema,
       annotations: closedRead,

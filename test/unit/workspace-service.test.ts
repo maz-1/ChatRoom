@@ -52,9 +52,20 @@ test("WorkspaceService lists and resolves directory links under an allowed root"
       assert.deepEqual(service.blockedRoots(), [link]);
     }
     assert.deepEqual(await service.list(), []);
-    assert.equal((await service.info(link)).summary, "Linked summary");
+    for (const input of [
+      link,
+      `${link}${path.sep}.`,
+      ...(process.platform === "win32" ? [link.toUpperCase()] : []),
+    ]) {
+      await assert.rejects(
+        service.info(input),
+        (error: unknown) =>
+          error instanceof ChatRoomError && error.code === "FORBIDDEN",
+      );
+    }
     service.unblock(process.platform === "win32" ? link.toUpperCase() : link);
     assert.equal((await service.list())[0]?.root, link);
+    assert.equal((await service.info(link)).summary, "Linked summary");
   } finally {
     database.close();
     await rm(temp, { recursive: true, force: true });

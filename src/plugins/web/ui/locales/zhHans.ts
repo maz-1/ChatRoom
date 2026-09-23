@@ -274,7 +274,7 @@ export const zhChatRoom: typeof enChatRoom = {
     block: "屏蔽当前工作区",
     blacklist: "黑名单",
     blacklistHelp:
-      "被屏蔽的工作区将在所有浏览器的工作区列表中隐藏。文件会保留，仍可通过路径访问；恢复后将重新显示。",
+      "被屏蔽的工作区将在所有浏览器的工作区列表中隐藏，且无法通过 workspace_info 读取。文件会保留；恢复后将重新显示并允许读取工作区信息。",
     blacklistEmpty: "暂无被屏蔽的工作区。",
     restore: "恢复显示",
     createTitle: "新建工作区",

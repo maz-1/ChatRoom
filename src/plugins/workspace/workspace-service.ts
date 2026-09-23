@@ -150,6 +150,8 @@ export class WorkspaceService {
 
   async info(input: string): Promise<WorkspaceInfo> {
     const root = await this.resolve(input);
+    if (this.blacklist.has(root))
+      throw new ChatRoomError("FORBIDDEN", "Workspace is blocked");
     const fs = await WorkspaceFs.create(root);
     const [summary, presetPrompt, instructions, skills] = await Promise.all([
       readSummary(fs),

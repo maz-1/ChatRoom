@@ -20,6 +20,14 @@ export class WorkspaceBlacklistRepository {
       .run(this.key(root), root);
   }
 
+  has(root: string): boolean {
+    return (
+      this.database.raw
+        .prepare("SELECT 1 FROM workspace_blacklist WHERE path_key = ?")
+        .get(this.key(root)) !== undefined
+    );
+  }
+
   remove(root: string): void {
     this.database.raw
       .prepare("DELETE FROM workspace_blacklist WHERE path_key = ?")

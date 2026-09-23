@@ -2,11 +2,72 @@ import assert from "node:assert/strict";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
 import { createApplication } from "../../src/app/application.js";
 import { AppDatabase } from "../../src/infrastructure/database/app-database.js";
 import { migrateDatabase } from "../../src/infrastructure/database/migrations.js";
 import type { WorkspaceEntry } from "../../src/plugins/workspace/types.js";
 import { createTestRuntime } from "../helpers/runtime.js";
+
+test("MCP workspace_info rejects blacklisted paths and resumes after restore", async () => {
+  const runtime = await createTestRuntime();
+  const client = new Client({ name: "blacklist-test", version: "1.0.0" });
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    const base = `http://127.0.0.1:${address.port}`;
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(`${base}/mcp`)),
+    );
+    const read = (root: string) =>
+      client.callTool({ name: "workspace_info", arguments: { root } });
+    assert.equal((await read(runtime.workspaceRoot)).isError, undefined);
+    const other = await runtime.components.application.workspaces.createProject(
+      runtime.root,
+      "other",
+    );
+
+    const block = await fetch(`${base}/api/workspace/blacklist`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ root: runtime.workspaceRoot, blocked: true }),
+    });
+    assert.equal(block.status, 200);
+    for (const root of [
+      runtime.workspaceRoot,
+      `${runtime.workspaceRoot}${path.sep}.`,
+      ...(process.platform === "win32"
+        ? [runtime.workspaceRoot.toUpperCase()]
+        : []),
+    ]) {
+      const result = await read(root);
+      assert.equal(result.isError, true);
+      assert.match(JSON.stringify(result.content), /FORBIDDEN/);
+      assert.equal(result.structuredContent, undefined);
+    }
+    assert.equal((await read(other.root)).isError, undefined);
+
+    const restore = await fetch(`${base}/api/workspace/blacklist`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ root: runtime.workspaceRoot, blocked: false }),
+    });
+    assert.equal(restore.status, 200);
+    const result = await read(runtime.workspaceRoot);
+    assert.equal(result.isError, undefined);
+    assert.equal(
+      (result.structuredContent as { root: string }).root,
+      runtime.workspaceRoot,
+    );
+  } finally {
+    await client.close().catch(() => undefined);
+    await runtime.cleanup();
+  }
+});
 
 test("WebUI blacklist hides workspaces, persists after restart, and restores stale entries", async () => {
   const runtime = await createTestRuntime();
@@ -43,7 +104,11 @@ test("WebUI blacklist hides workspaces, persists after restart, and restores sta
     const info = await fetch(
       `${base}/workspace?root=${encodeURIComponent(workspace.root)}`,
     );
-    assert.equal(info.status, 200, "hiding does not revoke path access");
+    assert.equal(
+      info.status,
+      403,
+      "blocked workspace metadata cannot be read by path",
+    );
     const operations = runtime.components.operations.list({
       pluginId: "workspace",
     });
