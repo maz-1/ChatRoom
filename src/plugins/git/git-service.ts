@@ -1,4 +1,4 @@
-import { mkdtemp, open, realpath, rm, stat } from "node:fs/promises";
+import { mkdtemp, open, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ChatRoomError } from "#core/errors/chatroom-error";
@@ -236,8 +236,7 @@ export class GitService {
       const root = path.resolve(
         (await this.run(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim(),
       );
-      const workspaceRoot = await realpath(cwd).catch(() => path.resolve(cwd));
-      return root === workspaceRoot ? root : null;
+      return root === path.resolve(cwd) ? root : null;
     } catch (error) {
       if (isNotRepositoryError(error)) return null;
       throw error;
