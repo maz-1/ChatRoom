@@ -5,6 +5,7 @@ import { api, type WorkspaceEntry } from "../api.js";
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 import WorkspaceCreateDialog from "./WorkspaceCreateDialog.vue";
+import WorkspaceBlacklistDialog from "./WorkspaceBlacklistDialog.vue";
 import WorkspaceFilesPane from "./WorkspaceFilesPane.vue";
 import WorkspaceGitPane from "./WorkspaceGitPane.vue";
 import WorkspacePromptPane from "./WorkspacePromptPane.vue";
@@ -21,6 +22,9 @@ const error = ref("");
 const createOpen = ref(false);
 const creating = ref(false);
 const createError = ref("");
+const blockedRoots = ref<string[]>([]);
+const blacklistOpen = ref(false);
+const blacklistBusy = ref(false);
 const locale = useLocale();
 const loadRequests = createRequestGate();
 
@@ -35,19 +39,45 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [workspaces, roots] = await Promise.all([
+    const [workspaces, roots, blocked] = await Promise.all([
       api<WorkspaceEntry[]>("/workspaces", { signal: request.signal }),
       api<string[]>("/workspace/roots", { signal: request.signal }),
+      api<string[]>("/workspace/blacklist", { signal: request.signal }),
     ]);
     if (!loadRequests.isCurrent(request)) return;
     items.value = workspaces;
     allowedRoots.value = roots;
+    blockedRoots.value = blocked;
     if (!items.value.some((item) => item.root === selectedRoot.value))
       selectedRoot.value = items.value[0]?.root ?? null;
   } catch (cause) {
     if (loadRequests.isCurrent(request)) error.value = errorMessage(cause);
   } finally {
     if (loadRequests.isCurrent(request)) loading.value = false;
+  }
+}
+
+async function setBlocked(root: string, blocked: boolean) {
+  if (blacklistBusy.value) return;
+  blacklistBusy.value = true;
+  loadRequests.invalidate();
+  loading.value = false;
+  error.value = "";
+  try {
+    blockedRoots.value = await api<string[]>("/workspace/blacklist", {
+      method: "PUT",
+      body: JSON.stringify({ root, blocked }),
+    });
+    items.value = items.value.filter(
+      (item) => !blockedRoots.value.includes(item.root),
+    );
+    if (!items.value.some((item) => item.root === selectedRoot.value))
+      selectedRoot.value = items.value[0]?.root ?? null;
+    await load();
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  } finally {
+    blacklistBusy.value = false;
   }
 }
 
@@ -60,7 +90,8 @@ async function createProject(parent: string, name: string) {
       body: JSON.stringify({ parent, name }),
     });
     await load();
-    selectedRoot.value = created.root;
+    if (items.value.some((item) => item.root === created.root))
+      selectedRoot.value = created.root;
     createOpen.value = false;
   } catch (cause) {
     createError.value = errorMessage(cause);
@@ -81,6 +112,7 @@ async function createProject(parent: string, name: string) {
               items.map((item) => ({ title: item.name, value: item.root }))
             "
             :loading="loading"
+            :disabled="blacklistBusy"
             density="compact"
             variant="outlined"
             hide-details
@@ -97,9 +129,25 @@ async function createProject(parent: string, name: string) {
             </div>
             <div class="workspace-actions">
               <v-btn
+                icon="$mdiEyeOffOutline"
+                size="small"
+                variant="text"
+                :disabled="!selectedRoot || loading || blacklistBusy"
+                :title="locale.t('$vuetify.chatroom.workspaces.block')"
+                :aria-label="locale.t('$vuetify.chatroom.workspaces.block')"
+                @click="selectedRoot && setBlocked(selectedRoot, true)"
+              />
+              <v-btn size="small" variant="text" @click="blacklistOpen = true">
+                {{ locale.t("$vuetify.chatroom.workspaces.blacklist") }}
+                <span v-if="blockedRoots.length" class="ml-1"
+                  >({{ blockedRoots.length }})</span
+                >
+              </v-btn>
+              <v-btn
                 icon="$mdiPlus"
                 size="small"
                 variant="text"
+                :disabled="blacklistBusy"
                 :aria-label="
                   locale.t('$vuetify.chatroom.workspaces.createTitle')
                 "
@@ -113,6 +161,7 @@ async function createProject(parent: string, name: string) {
                 size="small"
                 variant="text"
                 :loading="loading"
+                :disabled="blacklistBusy"
                 :aria-label="locale.t('$vuetify.chatroom.workspaces.refresh')"
                 @click="load"
               />
@@ -169,6 +218,14 @@ async function createProject(parent: string, name: string) {
       :busy="creating"
       :error="createError"
       @create="createProject"
+    />
+    <WorkspaceBlacklistDialog
+      v-model="blacklistOpen"
+      :roots="blockedRoots"
+      :busy="blacklistBusy"
+      :loading="loading"
+      :error="error"
+      @restore="setBlocked($event, false)"
     />
   </div>
 </template>

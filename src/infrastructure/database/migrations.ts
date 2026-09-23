@@ -30,6 +30,10 @@ export function migrateDatabase(db: DatabaseSync): void {
         migrate4To5(db);
         version = 5;
         break;
+      case 5:
+        migrate5To6(db);
+        version = 6;
+        break;
       default:
         throw new Error(`Unsupported ChatRoom database schema: ${version}`);
     }
@@ -123,6 +127,23 @@ function migrate4To5(db: DatabaseSync): void {
         "ALTER TABLE oauth_clients ADD COLUMN note TEXT NOT NULL DEFAULT '';",
       );
     db.exec("PRAGMA user_version = 5; COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function migrate5To6(db: DatabaseSync): void {
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workspace_blacklist (
+        path_key TEXT PRIMARY KEY,
+        root TEXT NOT NULL
+      );
+      PRAGMA user_version = 6;
+      COMMIT;
+    `);
   } catch (error) {
     db.exec("ROLLBACK;");
     throw error;

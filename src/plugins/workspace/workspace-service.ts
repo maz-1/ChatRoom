@@ -10,11 +10,18 @@ import {
 } from "./metadata.js";
 import type { WorkspaceEntry, WorkspaceInfo } from "./types.js";
 import { WorkspaceFs } from "./workspace-fs.js";
+import type { WorkspaceBlacklistRepository } from "./workspace-blacklist-repository.js";
 
 export class WorkspaceService {
-  private constructor(private readonly allowedRoots: string[]) {}
+  private constructor(
+    private readonly allowedRoots: string[],
+    private readonly blacklist: WorkspaceBlacklistRepository,
+  ) {}
 
-  static async create(allowedRoots: string[]): Promise<WorkspaceService> {
+  static async create(
+    allowedRoots: string[],
+    blacklist: WorkspaceBlacklistRepository,
+  ): Promise<WorkspaceService> {
     const canonicalRoots = await Promise.all(
       allowedRoots.map(async (root) => {
         const canonical = await realpath(expandHome(root)).catch(() => {
@@ -31,7 +38,7 @@ export class WorkspaceService {
         return canonical;
       }),
     );
-    return new WorkspaceService([...new Set(canonicalRoots)]);
+    return new WorkspaceService([...new Set(canonicalRoots)], blacklist);
   }
 
   roots(): string[] {
@@ -39,6 +46,9 @@ export class WorkspaceService {
   }
 
   async list(): Promise<WorkspaceEntry[]> {
+    const blocked = new Set(
+      this.blacklist.list().map((root) => this.blacklist.key(root)),
+    );
     const roots = new Set<string>();
     for (const allowedRoot of this.allowedRoots) {
       let entries;
@@ -50,6 +60,7 @@ export class WorkspaceService {
       for (const entry of entries) {
         if (entry.name.startsWith(".")) continue;
         const candidate = path.join(allowedRoot, entry.name);
+        if (blocked.has(this.blacklist.key(candidate))) continue;
         const info = await stat(candidate).catch(() => null);
         if (info?.isDirectory()) roots.add(candidate);
       }
@@ -67,6 +78,26 @@ export class WorkspaceService {
           };
         }),
     );
+  }
+
+  blockedRoots(): string[] {
+    return this.blacklist.list();
+  }
+
+  async block(input: string): Promise<string[]> {
+    this.blacklist.add(await this.resolve(input));
+    return this.blockedRoots();
+  }
+
+  unblock(input: string): string[] {
+    if (typeof input !== "string" || !input.trim() || !path.isAbsolute(input))
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "An absolute workspace root is required",
+      );
+    // Stale entries must remain removable after their directories are deleted.
+    this.blacklist.remove(input);
+    return this.blockedRoots();
   }
 
   async resolve(input: string): Promise<string> {

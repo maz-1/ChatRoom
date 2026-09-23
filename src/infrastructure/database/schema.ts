@@ -1,6 +1,11 @@
-export const DATABASE_SCHEMA_VERSION = 5;
+export const DATABASE_SCHEMA_VERSION = 6;
 
 export const DATABASE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS workspace_blacklist (
+    path_key TEXT PRIMARY KEY,
+    root TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS operations (
     operation_id TEXT PRIMARY KEY,
     plugin_id TEXT NOT NULL,

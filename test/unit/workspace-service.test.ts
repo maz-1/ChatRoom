@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { ChatRoomError } from "../../src/core/errors/chatroom-error.js";
 import { WorkspaceService } from "../../src/plugins/workspace/workspace-service.js";
+import { AppDatabase } from "../../src/infrastructure/database/app-database.js";
+import { WorkspaceBlacklistRepository } from "../../src/plugins/workspace/workspace-blacklist-repository.js";
 
 test("WorkspaceService lists and resolves directory links under an allowed root", async () => {
   const temp = await mkdtemp(
@@ -13,6 +15,7 @@ test("WorkspaceService lists and resolves directory links under an allowed root"
   const allowedRoot = path.join(temp, "projects");
   const target = path.join(temp, "linked-target");
   const link = path.join(allowedRoot, "linked-project");
+  const database = new AppDatabase(":memory:");
 
   try {
     await mkdir(allowedRoot);
@@ -27,7 +30,10 @@ test("WorkspaceService lists and resolves directory links under an allowed root"
       process.platform === "win32" ? "junction" : "dir",
     );
 
-    const service = await WorkspaceService.create([allowedRoot]);
+    const service = await WorkspaceService.create(
+      [allowedRoot],
+      new WorkspaceBlacklistRepository(database),
+    );
     const listed = await service.list();
     const entry = listed.find((item) => item.name === "linked-project");
 
@@ -39,7 +45,18 @@ test("WorkspaceService lists and resolves directory links under an allowed root"
     assert.equal(info.root, link);
     assert.equal(info.name, "linked-project");
     assert.equal(info.summary, "Linked summary");
+
+    await service.block(link);
+    if (process.platform === "win32") {
+      await service.block(link.toUpperCase());
+      assert.deepEqual(service.blockedRoots(), [link]);
+    }
+    assert.deepEqual(await service.list(), []);
+    assert.equal((await service.info(link)).summary, "Linked summary");
+    service.unblock(process.platform === "win32" ? link.toUpperCase() : link);
+    assert.equal((await service.list())[0]?.root, link);
   } finally {
+    database.close();
     await rm(temp, { recursive: true, force: true });
   }
 });
@@ -50,11 +67,15 @@ test("WorkspaceService still rejects paths that are not entries under an allowed
   );
   const allowedRoot = path.join(temp, "projects");
   const outside = path.join(temp, "outside");
+  const database = new AppDatabase(":memory:");
 
   try {
     await mkdir(allowedRoot);
     await mkdir(outside);
-    const service = await WorkspaceService.create([allowedRoot]);
+    const service = await WorkspaceService.create(
+      [allowedRoot],
+      new WorkspaceBlacklistRepository(database),
+    );
 
     await assert.rejects(
       () => service.info(outside),
@@ -62,6 +83,7 @@ test("WorkspaceService still rejects paths that are not entries under an allowed
         error instanceof ChatRoomError && error.code === "FORBIDDEN",
     );
   } finally {
+    database.close();
     await rm(temp, { recursive: true, force: true });
   }
 });

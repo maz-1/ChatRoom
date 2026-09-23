@@ -271,7 +271,14 @@ export const enChatRoom = {
     prompt: "Prompt",
     files: "Files",
     skills: "Skills",
-    empty: "No workspaces found under the configured allowed roots.",
+    empty:
+      "No visible workspaces. Create a workspace or restore one from the blacklist.",
+    block: "Hide current workspace",
+    blacklist: "Blacklist",
+    blacklistHelp:
+      "Blocked workspaces are hidden from the workspace list for all browsers. Files are kept and can still be accessed by path. Restore a workspace to show it again.",
+    blacklistEmpty: "No blocked workspaces.",
+    restore: "Restore",
     createTitle: "New workspace",
     refresh: "Refresh workspaces",
     projectName: "Project name",

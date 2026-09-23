@@ -2,6 +2,7 @@ import type { InternalPlugin } from "#plugins/types";
 import { createServiceToken } from "#plugins/types";
 import { registerWorkspaceTools } from "./mcp.js";
 import { WorkspaceService } from "./workspace-service.js";
+import { WorkspaceBlacklistRepository } from "./workspace-blacklist-repository.js";
 
 export const WorkspaceServiceToken =
   createServiceToken<WorkspaceService>("workspace");
@@ -11,7 +12,10 @@ export function createWorkspacePlugin(): InternalPlugin {
   return {
     id: "workspace",
     async activate(context) {
-      service = await WorkspaceService.create(context.config.allowedRoots);
+      service = await WorkspaceService.create(
+        context.config.allowedRoots,
+        new WorkspaceBlacklistRepository(context.database),
+      );
       context.services.provide(WorkspaceServiceToken, service);
     },
     registerMcp(mcp) {

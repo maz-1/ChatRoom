@@ -274,7 +274,7 @@ test("database migration preserves OAuth clients and adds management columns", a
     const version = migrated.raw.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    assert.equal(version.user_version, 5);
+    assert.equal(version.user_version, 6);
   } finally {
     migrated.close();
     await rm(dir, { recursive: true, force: true });

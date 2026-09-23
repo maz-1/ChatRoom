@@ -43,6 +43,35 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     res.json(application.workspaces.roots());
   });
 
+  router.get("/workspace/blacklist", (_req, res) => {
+    res.json(application.workspaces.blockedRoots());
+  });
+
+  router.put(
+    "/workspace/blacklist",
+    asyncRoute(async (req, res) => {
+      const body = bodyRecord(req.body);
+      const root = requireString(body.root, "root");
+      if (typeof body.blocked !== "boolean")
+        throw new ChatRoomError("INVALID_INPUT", "blocked must be a boolean");
+      const blocked = body.blocked;
+      res.json(
+        await application.operations.run(
+          {
+            pluginId: "workspace",
+            source: "gui",
+            action: blocked ? "block" : "unblock",
+            input: { root },
+          },
+          async () =>
+            blocked
+              ? application.workspaces.block(root)
+              : application.workspaces.unblock(root),
+        ),
+      );
+    }),
+  );
+
   router.get(
     "/workspace",
     asyncRoute(async (req, res) => {
