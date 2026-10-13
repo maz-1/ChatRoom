@@ -49,6 +49,9 @@ export const enChatRoom = {
     revokeConfirm:
       "Revoke and delete {0}? The client record, access tokens, refresh tokens, and authorization codes will be removed immediately. This cannot be undone.",
     empty: "No OAuth clients are registered.",
+    allowRegistration: "Allow new client registrations",
+    allowRegistrationHint:
+      "When off, MCP clients cannot register themselves via dynamic client registration. Existing clients keep working.",
     statuses: {
       active: "Active",
       disabled: "Disabled",

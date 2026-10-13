@@ -218,7 +218,7 @@ test("version-5 databases gain an empty blacklist without losing existing settin
     );
     assert.equal(
       database.raw.prepare("PRAGMA user_version").get()?.user_version,
-      6,
+      7,
     );
   } finally {
     database.close();

@@ -403,6 +403,73 @@ function assertRegistrationLog(input: {
   assert.equal(typeof value.sourcePort, "number");
 }
 
+test("OAuth registration settings API persists the toggle and gates /oauth/register", async () => {
+  const runtime = await createTestRuntime();
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    const base = `http://127.0.0.1:${address.port}`;
+    const settingsUrl = `${base}/api/oauth-clients/settings`;
+
+    const initialResponse = await fetch(settingsUrl);
+    assert.equal(initialResponse.status, 200);
+    assert.deepEqual(await initialResponse.json(), {
+      allowNewRegistrations: true,
+    });
+
+    const registerBefore = await fetch(`${base}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Probe",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(registerBefore.status, 201);
+
+    const disableResponse = await fetch(settingsUrl, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ allowNewRegistrations: false }),
+    });
+    assert.equal(disableResponse.status, 200);
+    assert.deepEqual(await disableResponse.json(), {
+      allowNewRegistrations: false,
+    });
+
+    const registerAfter = await fetch(`${base}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Probe",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(registerAfter.status, 400);
+    assert.deepEqual(await registerAfter.json(), {
+      error: "access_denied",
+      error_description: "OAuth client registration is disabled",
+    });
+
+    const invalidResponse = await fetch(settingsUrl, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ allowNewRegistrations: "yes" }),
+    });
+    assert.equal(invalidResponse.status, 400);
+
+    const settings = runtime.components.database.raw
+      .prepare(
+        "SELECT allow_new_registrations FROM oauth_registration_settings WHERE id = 1",
+      )
+      .get() as { allow_new_registrations: number };
+    assert.equal(settings.allow_new_registrations, 0);
+  } finally {
+    await runtime.cleanup();
+  }
+});
+
 test("WebUI OAuth client management API lists, disables, and deletes revoked clients", async () => {
   const runtime = await createTestRuntime();
   try {

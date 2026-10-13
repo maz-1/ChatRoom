@@ -34,6 +34,10 @@ export function migrateDatabase(db: DatabaseSync): void {
         migrate5To6(db);
         version = 6;
         break;
+      case 6:
+        migrate6To7(db);
+        version = 7;
+        break;
       default:
         throw new Error(`Unsupported ChatRoom database schema: ${version}`);
     }
@@ -142,6 +146,24 @@ function migrate5To6(db: DatabaseSync): void {
         root TEXT NOT NULL
       );
       PRAGMA user_version = 6;
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+function migrate6To7(db: DatabaseSync): void {
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS oauth_registration_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        allow_new_registrations INTEGER NOT NULL DEFAULT 1 CHECK(allow_new_registrations IN (0, 1)),
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 7;
       COMMIT;
     `);
   } catch (error) {

@@ -8,6 +8,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import type { OAuthStateRepository } from "#core/auth/repository";
 import type { WebSessionRepository } from "#core/auth/session-repository";
+import type { OAuthSettingsRepository } from "#infrastructure/database/oauth-settings-repository";
 import type { ChatRoomConfig } from "#config/types";
 
 export interface AuthorizationRequest {
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly sessions: WebSessionRepository,
     private readonly config: ChatRoomConfig["auth"],
     private readonly ownerToken: string | null,
+    private readonly settings: OAuthSettingsRepository | null = null,
   ) {
     const now = new Date().toISOString();
     repository.prune(now);
@@ -50,6 +52,11 @@ export class AuthService {
   }
 
   registerClient(name: string, redirectUris: string[]) {
+    if (this.settings && !this.settings.getRegistrationEnabled())
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        "OAuth client registration is disabled",
+      );
     if (!name || redirectUris.length === 0)
       throw new ChatRoomError(
         "INVALID_INPUT",
@@ -287,6 +294,20 @@ export class AuthService {
 
   isOAuthClientDisabled(clientId: string): boolean {
     return Boolean(this.repository.getClient(clientId)?.disabledAt);
+  }
+
+  isRegistrationEnabled(): boolean {
+    return this.settings ? this.settings.getRegistrationEnabled() : true;
+  }
+
+  setRegistrationEnabled(enabled: boolean): boolean {
+    if (!this.settings)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "OAuth registration settings are unavailable",
+      );
+    this.settings.setRegistrationEnabled(enabled);
+    return this.settings.getRegistrationEnabled();
   }
 
   revoke(token: string): void {

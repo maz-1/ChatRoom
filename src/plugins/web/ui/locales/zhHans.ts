@@ -50,6 +50,9 @@ export const zhChatRoom: typeof enChatRoom = {
     revokeConfirm:
       "确定吊销并删除 {0} 吗？客户端记录、access token、refresh token 和 authorization code 会立即删除，且无法恢复。",
     empty: "当前没有已注册的 OAuth 客户端。",
+    allowRegistration: "允许注册新的 OAuth 客户端",
+    allowRegistrationHint:
+      "关闭后，MCP 客户端将无法通过动态客户端注册自行接入；已有客户端不受影响。",
     statuses: {
       active: "正常",
       disabled: "已禁用",

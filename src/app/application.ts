@@ -4,6 +4,7 @@ import { OperationRepository } from "#infrastructure/database/operation-reposito
 import { McpToolSettingsRepository } from "#infrastructure/database/mcp-tool-settings-repository";
 import { McpServerSettingsRepository } from "#infrastructure/database/mcp-server-settings-repository";
 import { OAuthRepository } from "#infrastructure/database/oauth-repository";
+import { OAuthSettingsRepository } from "#infrastructure/database/oauth-settings-repository";
 import { PasskeyRepository } from "#infrastructure/database/passkey-repository";
 import { WebSessionRepository } from "#infrastructure/database/web-session-repository";
 import { RuntimeEventBus } from "./event-bus.js";
@@ -74,6 +75,7 @@ export async function createApplication(
       new WebSessionRepository(database),
       config.auth,
       secrets.ownerToken,
+      new OAuthSettingsRepository(database),
     );
     const passkeys = new PasskeyService(new PasskeyRepository(database));
     const services = new ServiceRegistry();

@@ -1,11 +1,30 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { Router as ExpressRouter } from "express";
 import type { AuthService } from "#auth/auth-service";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import { bodyRecord } from "#presentation/http/http-utils";
 
+const registrationSettingsPatchSchema = z
+  .object({ allowNewRegistrations: z.boolean() })
+  .strict();
+
 export function createOAuthClientsApiRouter(auth: AuthService): ExpressRouter {
   const router = Router();
+
+  // Registered before "/oauth-clients/:clientId" so "settings" is not captured as a clientId.
+  router.get("/oauth-clients/settings", (_req, res) => {
+    res.json({ allowNewRegistrations: auth.isRegistrationEnabled() });
+  });
+
+  router.patch("/oauth-clients/settings", (req, res) => {
+    const parsed = registrationSettingsPatchSchema.parse(bodyRecord(req.body));
+    res.json({
+      allowNewRegistrations: auth.setRegistrationEnabled(
+        parsed.allowNewRegistrations,
+      ),
+    });
+  });
 
   router.get("/oauth-clients", (_req, res) => {
     res.json({ clients: auth.listOAuthClients() });

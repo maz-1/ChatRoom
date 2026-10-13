@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 6;
+export const DATABASE_SCHEMA_VERSION = 7;
 
 export const DATABASE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS workspace_blacklist (
@@ -99,6 +99,12 @@ export const DATABASE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS mcp_server_settings (
     server_name TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_registration_settings (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    allow_new_registrations INTEGER NOT NULL DEFAULT 1 CHECK(allow_new_registrations IN (0, 1)),
     updated_at TEXT NOT NULL
   );
 

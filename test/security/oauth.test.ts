@@ -3,6 +3,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import { AppDatabase } from "../../src/infrastructure/database/app-database.js";
 import { OAuthRepository } from "../../src/infrastructure/database/oauth-repository.js";
+import { OAuthSettingsRepository } from "../../src/infrastructure/database/oauth-settings-repository.js";
 import { WebSessionRepository } from "../../src/infrastructure/database/web-session-repository.js";
 import { AuthService } from "../../src/auth/auth-service.js";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -224,6 +225,72 @@ test("OAuth client management tracks runtime access, disables calls without inva
   }
 });
 
+test("OAuth client registration toggle persists and gates registerClient", async () => {
+  const dir = await mkdtemp(
+    path.join(os.tmpdir(), "chatroom-oauth-registration-toggle-"),
+  );
+  const db = new AppDatabase(path.join(dir, "auth.sqlite"));
+  let reopened = false;
+  try {
+    const settings = new OAuthSettingsRepository(db);
+    const config = {
+      localWebAuth: false,
+      mcpPublicBaseUrl: null,
+      webPublicBaseUrl: null,
+      allowedRedirectHosts: ["127.0.0.1"],
+    };
+    const auth = new AuthService(
+      new OAuthRepository(db),
+      new WebSessionRepository(db),
+      config,
+      "owner-secret",
+      settings,
+    );
+    assert.equal(
+      auth.isRegistrationEnabled(),
+      true,
+      "registration defaults to enabled after migration",
+    );
+    auth.registerClient("Before Toggle", ["http://127.0.0.1/callback"]);
+
+    auth.setRegistrationEnabled(false);
+    assert.throws(() =>
+      auth.registerClient("After Toggle", ["http://127.0.0.1/callback"]),
+    );
+
+    // Reopen the database: the closed state must survive a restart.
+    db.close();
+    reopened = true;
+    const restarted = new AppDatabase(path.join(dir, "auth.sqlite"));
+    try {
+      const persisted = new AuthService(
+        new OAuthRepository(restarted),
+        new WebSessionRepository(restarted),
+        config,
+        "owner-secret",
+        new OAuthSettingsRepository(restarted),
+      );
+      assert.equal(persisted.isRegistrationEnabled(), false);
+      assert.throws(() =>
+        persisted.registerClient("After Restart", [
+          "http://127.0.0.1/callback",
+        ]),
+      );
+      persisted.setRegistrationEnabled(true);
+      assert.ok(
+        persisted.registerClient("After Re-enable", [
+          "http://127.0.0.1/callback",
+        ]),
+      );
+    } finally {
+      restarted.close();
+    }
+  } finally {
+    if (!reopened) db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("database migration preserves OAuth clients and adds management columns", async () => {
   const dir = await mkdtemp(
     path.join(os.tmpdir(), "chatroom-oauth-migration-"),
@@ -274,7 +341,7 @@ test("database migration preserves OAuth clients and adds management columns", a
     const version = migrated.raw.prepare("PRAGMA user_version").get() as {
       user_version: number;
     };
-    assert.equal(version.user_version, 6);
+    assert.equal(version.user_version, 7);
   } finally {
     migrated.close();
     await rm(dir, { recursive: true, force: true });

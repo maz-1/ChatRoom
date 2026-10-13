@@ -12,6 +12,8 @@ const revokeTarget = ref<OAuthClientSummary | null>(null);
 const noteTarget = ref<OAuthClientSummary | null>(null);
 const noteDraft = ref("");
 const expandedRedirects = ref(new Set<string>());
+const allowRegistration = ref(true);
+const settingsBusy = ref(false);
 
 const activeCount = computed(
   () => clients.value.filter((client) => !client.disabledAt).length,
@@ -27,6 +29,10 @@ async function load(): Promise<void> {
       "/oauth-clients",
     );
     clients.value = payload.clients;
+    const settings = await api<{ allowNewRegistrations: boolean }>(
+      "/oauth-clients/settings",
+    );
+    allowRegistration.value = settings.allowNewRegistrations;
   } catch (cause) {
     error.value = messageOf(cause);
   } finally {
@@ -56,6 +62,26 @@ async function setDisabled(
   } finally {
     busy.value.delete(client.clientId);
     busy.value = new Set(busy.value);
+  }
+}
+
+async function setRegistrationEnabled(enabled: boolean): Promise<void> {
+  if (settingsBusy.value) return;
+  settingsBusy.value = true;
+  error.value = null;
+  try {
+    const settings = await api<{ allowNewRegistrations: boolean }>(
+      "/oauth-clients/settings",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ allowNewRegistrations: enabled }),
+      },
+    );
+    allowRegistration.value = settings.allowNewRegistrations;
+  } catch (cause) {
+    error.value = messageOf(cause);
+  } finally {
+    settingsBusy.value = false;
   }
 }
 
@@ -174,6 +200,33 @@ function messageOf(cause: unknown): string {
             )
           }}
         </span>
+        <div class="d-flex align-center ga-2">
+          <v-tooltip
+            activator="parent"
+            location="bottom"
+            max-width="360"
+            open-on-click
+          >
+            {{
+              locale.t("$vuetify.chatroom.oauthClients.allowRegistrationHint")
+            }}
+          </v-tooltip>
+          <v-switch
+            :model-value="allowRegistration"
+            color="primary"
+            density="compact"
+            hide-details
+            inset
+            :loading="settingsBusy"
+            :aria-label="
+              locale.t('$vuetify.chatroom.oauthClients.allowRegistration')
+            "
+            @update:model-value="setRegistrationEnabled(Boolean($event))"
+          />
+          <span class="text-caption" :class="{ muted: !allowRegistration }">
+            {{ locale.t("$vuetify.chatroom.oauthClients.allowRegistration") }}
+          </span>
+        </div>
         <v-btn
           variant="text"
           size="small"
