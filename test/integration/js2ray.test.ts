@@ -349,6 +349,7 @@ test("js2ray reverse WebUI requires login and public Origin and streams authenti
   const status = await request("/api/js2ray", { headers: { cookie } });
   assert.equal(status.status, 200);
   assert.equal(JSON.parse(status.body).state, "running");
+  assert.deepEqual(JSON.parse(status.body).listenerEndpoints, []);
   assert.doesNotMatch(status.body, new RegExp(id));
   await new Promise<void>((resolve, reject) => {
     const req = http.get(

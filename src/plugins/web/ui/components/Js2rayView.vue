@@ -61,15 +61,38 @@ onBeforeUnmount(() => {
           >
         </v-list-item>
         <v-list-item
-          :title="text('listeners')"
-          :subtitle="String(status.listeners)"
-        />
-        <v-list-item
           v-if="status.lastError"
           :title="text('error')"
           :subtitle="`${status.lastError.code} · ${status.lastError.phase}`"
         />
       </v-list>
+      <v-card-text class="pt-0">
+        <h3 class="text-subtitle-1 mb-2">{{ text("listeners") }}</h3>
+        <v-table density="compact">
+          <thead>
+            <tr>
+              <th>{{ text("listenAddress") }}</th>
+              <th>{{ text("listenPort") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-if="status.listenerEndpoints?.length">
+              <tr
+                v-for="listener in status.listenerEndpoints"
+                :key="`${listener.address}:${listener.port}`"
+              >
+                <td>{{ listener.address }}</td>
+                <td>{{ listener.port }}</td>
+              </tr>
+            </template>
+            <tr v-else>
+              <td colspan="2" class="text-center text-medium-emphasis">
+                {{ text("noListeners") }}
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
     </v-card>
     <h3 v-if="status" class="mb-3">{{ text("reverse") }}</h3>
     <v-table v-if="status?.reverse.length" class="mb-4">

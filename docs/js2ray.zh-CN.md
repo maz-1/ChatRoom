@@ -106,7 +106,7 @@ ChatRoom 内置纯 JavaScript js2ray 运行时，可为 `http_request` 提供 VL
 
 ## 状态与诊断
 
-WebUI 的 js2ray 页面及已认证的 `GET /api/js2ray` 显示运行状态、代理监听数、反代承载和会话数。active 表示控制通道可用，不能据此认定公网域名或 HTTPS 前端已经配置正确。
+WebUI 的 js2ray 页面以表格列出代理实际监听的地址和端口，没有监听时显示“未监听任何端口，代理服务仅ChatRoom内部可达”。已认证的 `GET /api/js2ray` 通过 `listenerEndpoints` 返回地址和端口列表，保留 `listeners` 数量字段供现有客户端使用；页面及接口还显示运行状态、反代承载和会话数。active 表示控制通道可用，不能据此认定公网域名或 HTTPS 前端已经配置正确。
 
 日志仅保留运行阶段、错误代码与连接状态，不返回节点配置、UUID、密钥或原始异常。启用功能时，配置或资源无效会使 ChatRoom 启动失败；修正配置或关闭 js2ray 后重新启动。普通用户关闭状态无需节点配置文件。
 

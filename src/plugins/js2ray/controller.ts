@@ -34,6 +34,12 @@ export class Js2rayController {
         ? "disabled"
         : (this.runtime?.state ?? (this.lastError ? "error" : "idle")),
       listeners: this.runtime?.listenersInfo.length ?? 0,
+      listenerEndpoints: (this.runtime?.listenersInfo ?? []).flatMap(
+        ({ address }) =>
+          address && typeof address === "object"
+            ? [{ address: address.address, port: address.port }]
+            : [],
+      ),
       reverse: this.runtime?.stats.reverse ?? [],
       lastError: this.lastError,
     };

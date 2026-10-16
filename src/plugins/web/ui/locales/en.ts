@@ -18,6 +18,10 @@ export const enChatRoom = {
     refresh: "Refresh status",
     state: "Runtime",
     listeners: "Proxy listeners",
+    listenAddress: "Listen address",
+    listenPort: "Port",
+    noListeners:
+      "No ports are listening; the proxy service is only accessible within ChatRoom.",
     reverse: "Reverse tunnels",
     tag: "Tag",
     role: "Role",

@@ -2,6 +2,7 @@ export interface Js2rayStatus {
   enabled: boolean;
   state: string;
   listeners: number;
+  listenerEndpoints: Array<{ address: string; port: number }>;
   reverse: Array<{
     tag: string;
     role: string;
