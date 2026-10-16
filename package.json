@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "check:architecture": "node scripts/check-architecture.mjs",
     "test": "node scripts/run-tests.mjs",
-    "check": "npm run format:check && npm run typecheck && npm run check:architecture && npm test && npm run build",
+    "check": "npm run format:check && npm run typecheck && npm run check:architecture && npm test && npm run build && npm run verify:package",
+    "verify:package": "node scripts/verify-js2ray-package.mjs",
     "start": "node dist/cli/index.js serve",
     "release": "npm publish --tag latest --access public",
     "prepack": "npm run check",
@@ -36,8 +37,9 @@
     "@simplewebauthn/server": "13.3.2",
     "compression": "^1.8.2",
     "express": "^5.1.0",
+    "re2js": "2.8.6",
     "undici": "^8.10.2",
-    "ws": "^8.18.3",
+    "ws": "8.22.0",
     "zod": "^4.0.17"
   },
   "optionalDependencies": {
@@ -45,7 +47,6 @@
   },
   "devDependencies": {
     "@mdi/js": "^7.4.47",
-    "@modelcontextprotocol/client": "^2.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.3",
@@ -89,6 +90,14 @@
     "node-pty@1.1.0": true
   },
   "imports": {
+    "#js2ray": {
+      "chatroom-source": {
+        "types": "./vendor/js2ray/index.d.ts",
+        "default": "./vendor/js2ray/index.mjs"
+      },
+      "types": "./dist/vendor/js2ray/index.d.ts",
+      "default": "./dist/vendor/js2ray/index.mjs"
+    },
     "#app/*": {
       "chatroom-source": "./src/app/*.ts",
       "default": "./dist/app/*.js"

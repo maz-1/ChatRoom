@@ -20,6 +20,18 @@
   "operations": {
     "maxPayloadBytes": 524288
   },
+  "js2ray": {
+    "enabled": false,
+    "configPath": null,
+    "outboundTag": null,
+    "reverse": {
+      "enabled": false,
+      "bridgeTag": "bridge",
+      "localOutboundTag": "mcp-local",
+      "targetHost": "127.0.0.1",
+      "targetPort": 8765
+    }
+  },
   "mcp": {
     "callTimeoutMs": 60000,
     "maxResultBytes": 1048576,

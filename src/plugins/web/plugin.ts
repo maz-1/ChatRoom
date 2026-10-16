@@ -6,6 +6,7 @@ import { McpProxyServiceToken } from "#plugins/mcp-proxy/plugin";
 import { ProcessService } from "#plugins/process/plugin";
 import { WorkspaceServiceToken } from "#plugins/workspace/plugin";
 import { WebRuntime } from "./runtime.js";
+import { Js2rayService } from "#plugins/js2ray/plugin";
 
 interface WebPluginService {
   application: WebRuntime;
@@ -25,6 +26,7 @@ export function createWebPlugin(): InternalPlugin {
           context.services.require(ComputerServiceToken),
           context.services.require(McpProxyServiceToken),
           context.mcpTools,
+          context.services.require(Js2rayService),
         ),
       });
     },

@@ -39,6 +39,35 @@ public sealed class ChatRoomConfig
 
     [JsonProperty("process", Order = 9)]
     public ProcessSection Process { get; set; } = new ProcessSection();
+
+    [JsonProperty("js2ray", Order = 10)]
+    public Js2raySection Js2ray { get; set; } = new Js2raySection();
+}
+
+public sealed class Js2raySection
+{
+    [JsonProperty("enabled", Order = 1)]
+    public bool Enabled { get; set; }
+    [JsonProperty("configPath", Order = 2)]
+    public string? ConfigPath { get; set; }
+    [JsonProperty("outboundTag", Order = 3)]
+    public string? OutboundTag { get; set; }
+    [JsonProperty("reverse", Order = 4)]
+    public Js2rayReverseSection Reverse { get; set; } = new Js2rayReverseSection();
+}
+
+public sealed class Js2rayReverseSection
+{
+    [JsonProperty("enabled", Order = 1)]
+    public bool Enabled { get; set; }
+    [JsonProperty("bridgeTag", Order = 2)]
+    public string BridgeTag { get; set; } = "bridge";
+    [JsonProperty("localOutboundTag", Order = 3)]
+    public string LocalOutboundTag { get; set; } = "mcp-local";
+    [JsonProperty("targetHost", Order = 4)]
+    public string TargetHost { get; set; } = "127.0.0.1";
+    [JsonProperty("targetPort", Order = 5)]
+    public int TargetPort { get; set; } = 8765;
 }
 
 public sealed class ServerSection

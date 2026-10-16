@@ -1,6 +1,7 @@
 export type {
   UpdateStatus,
   RuntimeStatus,
+  Js2rayStatus,
   PasskeySummary,
   McpToolSummary,
   CloudStatus,

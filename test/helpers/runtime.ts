@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ChatRoomConfig } from "../../src/config/types.js";
+import { defaultJs2rayConfig } from "../../src/config/js2ray-config.js";
 import { FileLogStore } from "../../src/infrastructure/logging/file-log-store.js";
 import { SystemLog } from "../../src/infrastructure/logging/system-log.js";
 import {
@@ -48,6 +49,7 @@ export async function createTestRuntime(
       maxResponseBytes: 16 * 1024,
     },
     operations: { maxPayloadBytes: 16 * 1024 },
+    js2ray: defaultJs2rayConfig(),
     mcp: {
       callTimeoutMs: 5_000,
       maxResultBytes: 16 * 1024,
@@ -70,6 +72,7 @@ export async function createTestRuntime(
     config,
     components,
     cleanup: async () => {
+      await components.js2ray.stop().catch(() => undefined);
       await components.http.close().catch(() => undefined);
       await components.plugins.stop().catch(() => undefined);
       try {

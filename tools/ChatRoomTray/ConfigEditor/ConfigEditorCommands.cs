@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using Newtonsoft.Json.Linq;
 
 
 namespace ChatRoomTray.ConfigEditor;
@@ -571,6 +572,25 @@ internal static class ConfigEditorCommands
 
             var text = File.ReadAllText(target);
             Check("包含 mcp.servers", text.Contains("\"servers\": {}"));
+
+            var js2rayConfig = ConfigStore.CreateDefault();
+            js2rayConfig.Js2ray.Enabled = true;
+            js2rayConfig.Js2ray.ConfigPath = "./nodes/runtime.json";
+            js2rayConfig.Js2ray.OutboundTag = "proxy";
+            js2rayConfig.Js2ray.Reverse.Enabled = true;
+            Check("js2ray 反代要求公网地址", ConfigValidator.Validate(js2rayConfig, Array.Empty<string>(), true)
+                .Any(issue => issue.Path == "js2ray.reverse.enabled" && issue.Severity == IssueSeverity.Error));
+            js2rayConfig.Auth.McpPublicBaseUrl = "https://mcp.example.com";
+            Check("js2ray 有效配置通过校验", !ConfigValidator.HasErrors(ConfigValidator.Validate(js2rayConfig, Array.Empty<string>(), true)));
+            var js2rayPath = Path.Combine(directory, "js2ray-main.json");
+            ConfigStore.Save(js2rayPath, js2rayConfig);
+            var js2rayReloaded = ConfigStore.Load(js2rayPath);
+            Check("js2ray 配置完整往返且无未知字段", js2rayReloaded.UnknownKeys.Count == 0
+                && ConfigStore.Serialize(js2rayReloaded.Config) == ConfigStore.Serialize(js2rayConfig));
+            var js2rayDocument = JObject.Parse(File.ReadAllText(js2rayPath));
+            ((JObject)js2rayDocument["js2ray"]!["reverse"]!)["unknownOption"] = true;
+            File.WriteAllText(js2rayPath, js2rayDocument.ToString());
+            Check("js2ray 嵌套未知字段被识别", ConfigStore.Load(js2rayPath).UnknownKeys.Contains("js2ray.reverse.unknownOption"));
 
             var trayIni = Path.Combine(directory, "chatroom-tray.ini");
             File.WriteAllText(

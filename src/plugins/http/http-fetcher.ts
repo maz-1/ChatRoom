@@ -1,5 +1,8 @@
 import { ChatRoomError } from "#core/errors/chatroom-error";
-import { createProxyDispatcher } from "#core/runtime/proxy-dispatcher";
+import {
+  createProxyDispatcher,
+  type ProxyDispatcherFactory,
+} from "#core/runtime/proxy-dispatcher";
 import type { HttpRequestInput, HttpResponse } from "./types.js";
 import {
   fetch,
@@ -15,7 +18,10 @@ export interface HttpFetcherLimits {
 }
 
 export class HttpFetcher {
-  constructor(private readonly limits: HttpFetcherLimits) {}
+  constructor(
+    private readonly limits: HttpFetcherLimits,
+    private readonly namedProxy?: ProxyDispatcherFactory,
+  ) {}
 
   async request(input: HttpRequestInput): Promise<HttpResponse> {
     const url = parseTargetUrl(input.url);
@@ -36,7 +42,7 @@ export class HttpFetcher {
     const dispatcher =
       input.proxy === undefined
         ? undefined
-        : createProxyDispatcher(input.proxy, timeoutMs);
+        : createProxyDispatcher(input.proxy, timeoutMs, this.namedProxy);
     try {
       const options: RequestInit & { dispatcher?: Dispatcher } = {
         method: input.method,

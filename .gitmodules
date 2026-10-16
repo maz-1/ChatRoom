@@ -1,0 +1,4 @@
+[submodule "vendor/js2ray"]
+	path = vendor/js2ray
+	url = https://github.com/maz-1/js2ray.git
+	branch = codex/js2ray-release-acceptance

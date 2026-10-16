@@ -43,7 +43,13 @@ ChatGPT 通过 MCP Endpoint 连接 ChatRoom。需要远程访问时，可以直�
 
 ChatRoom Cloud 已内置于 ChatRoom，用于提供可选的 Remote MCP 和 Remote WebUI 公网访问。在 WebUI 的 **Cloud** 页面即可购买、恢复和管理服务。
 
-## 文档
+## js2ray 代理
+
+ChatRoom 可使用进程内 js2ray 发送 HTTP 请求，并通过 Bridge/Portal 提供远程访问，无须新增本地代理监听端口。配置运行时后，`http_request` 设置 `proxy: "js2ray"` 即可使用。详见 [配置与反代说明](js2ray.zh-CN.md)。
+
+源码构建前先运行 `git submodule update --init --recursive`；npm 发布包已包含固定版本的运行时快照。
+
+## 官方文档
 
 [官方文档](https://doc.chatroomcp.com/zh/)
 

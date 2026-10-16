@@ -43,6 +43,12 @@ See [Use ChatRoom with ChatGPT](https://doc.chatroomcp.com/chatgpt) for the curr
 
 ChatRoom Cloud is built into ChatRoom and provides optional public access for Remote MCP and Remote WebUI. Open the **Cloud** page in the WebUI to purchase, restore, or manage access.
 
+## js2ray proxy
+
+ChatRoom includes an optional in-process js2ray runtime for proxied HTTP requests and Bridge/Portal remote access, without a local proxy listener. Set `proxy: "js2ray"` in `http_request` after configuring the runtime. See [configuration and reverse setup](docs/js2ray.zh-CN.md).
+
+Source builds require `git submodule update --init --recursive` before `npm ci`. Published npm packages include the pinned runtime snapshot.
+
 ## Documentation
 
 [Official Documentation](https://doc.chatroomcp.com/)

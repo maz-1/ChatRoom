@@ -15,6 +15,7 @@ export type View =
   | "tools"
   | "oauth-clients"
   | "cloud"
+  | "js2ray"
   | "operations"
   | "systemLogs";
 
@@ -97,6 +98,15 @@ const definitions: readonly ViewDefinition[] = [
     icon: "$mdiTextBoxOutline",
     component: defineAsyncComponent(
       () => import("../components/OperationsView.vue"),
+    ),
+  },
+  {
+    id: "js2ray",
+    path: "/js2ray",
+    titleKey: "nav.js2ray",
+    icon: "$mdiServerNetwork",
+    component: defineAsyncComponent(
+      () => import("../components/Js2rayView.vue"),
     ),
   },
   {

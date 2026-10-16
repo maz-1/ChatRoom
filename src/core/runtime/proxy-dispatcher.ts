@@ -1,6 +1,8 @@
 import { ProxyAgent, Socks5ProxyAgent, type Dispatcher } from "undici";
 import { ChatRoomError } from "../errors/chatroom-error.js";
 
+export type ProxyDispatcherFactory = (timeoutMs: number) => Dispatcher;
+
 /**
  * Build an undici dispatcher that routes outbound connections through an
  * unauthenticated HTTP, HTTPS, or SOCKS5 proxy.
@@ -8,7 +10,16 @@ import { ChatRoomError } from "../errors/chatroom-error.js";
 export function createProxyDispatcher(
   raw: string,
   timeoutMs: number,
+  namedProxy?: ProxyDispatcherFactory,
 ): Dispatcher {
+  if (raw === "js2ray" || raw === "v2ray") {
+    if (!namedProxy)
+      throw new ChatRoomError(
+        "UNSUPPORTED",
+        "The js2ray proxy is not available",
+      );
+    return namedProxy(timeoutMs);
+  }
   let proxy: URL;
   try {
     proxy = new URL(raw);

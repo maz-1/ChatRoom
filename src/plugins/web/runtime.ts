@@ -15,6 +15,7 @@ export class WebRuntime {
     readonly computer: ComputerService,
     readonly mcpProxy: McpProxyService,
     readonly mcpTools: McpToolControl,
+    readonly js2ray: import("#plugins/js2ray/controller").Js2rayController,
   ) {}
 
   processKill(processId: string, force = false) {

@@ -1,9 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginMcpRegistrar } from "#mcp/server/plugin-mcp-registrar";
-import {
-  closedRead,
-  openWorldMutation,
-} from "#mcp/server/tool-support";
+import { closedRead, openWorldMutation } from "#mcp/server/tool-support";
 import type { McpProxyService } from "./mcp-proxy-service.js";
 import {
   mcpCallInputSchema,

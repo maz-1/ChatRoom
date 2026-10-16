@@ -44,6 +44,7 @@ export interface ChatRoomConfig {
     maxPayloadBytes: number;
   };
   mcp: McpConfig;
+  js2ray: import("./js2ray-config.js").Js2rayConfig;
   process: {
     maxOutputBytes: number;
     defaultTimeoutMs: number;

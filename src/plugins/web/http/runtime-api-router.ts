@@ -18,6 +18,7 @@ export function createRuntimeApiRouter(
   const router = Router();
 
   router.get("/runtime", (_req, res) => res.json(runtimeStatus()));
+  router.get("/js2ray", (_req, res) => res.json(application.js2ray.status()));
   router.get("/mcp/tools", (_req, res) => {
     res.json(application.mcpTools.list());
   });

@@ -209,6 +209,7 @@ public partial class MainForm : Form
         _tabs.Pages.Add(BuildAuthTab());
         _tabs.Pages.Add(BuildLimitsTab());
         _tabs.Pages.Add(BuildMcpTab());
+        _tabs.Pages.Add(BuildJs2rayTab());
     }
 
     private TabPage BuildPathsTab()

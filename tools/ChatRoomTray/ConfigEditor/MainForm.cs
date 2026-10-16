@@ -120,6 +120,7 @@ public partial class MainForm : Form
 
     private void LoadIntoUi()
     {
+        LoadJs2rayIntoUi();
         _dataDirBox.Text = _config.DataDir;
         _databasePathBox.Text = _config.DatabasePath ?? string.Empty;
 
@@ -149,6 +150,7 @@ public partial class MainForm : Form
 
     private void ReadFromUi()
     {
+        ReadJs2rayFromUi();
         _config.DataDir = (_dataDirBox.Text ?? string.Empty).Trim();
         _config.DatabasePath = NullIfBlank(_databasePathBox.Text ?? string.Empty);
 

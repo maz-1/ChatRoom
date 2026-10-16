@@ -11,10 +11,7 @@ import type { Readable } from "node:stream";
 import type { McpConfig, McpServerConfig } from "#config/types";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import { childEnvironment } from "#core/runtime/child-environment";
-import {
-  CHATROOM_NAME,
-  CHATROOM_VERSION,
-} from "#core/runtime/identity";
+import { CHATROOM_NAME, CHATROOM_VERSION } from "#core/runtime/identity";
 import { createProxyDispatcher } from "#core/runtime/proxy-dispatcher";
 import { fetch as undiciFetch, type Dispatcher } from "undici";
 import type { RuntimeEventBus } from "#app/event-bus";

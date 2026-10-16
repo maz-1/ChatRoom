@@ -90,6 +90,8 @@ export interface RuntimeStatus {
   uptimeMinutes: number;
 }
 
+export type { Js2rayStatus } from "#plugins/js2ray/types";
+
 export interface UpdateStatus {
   latestVersion: string | null;
   updateAvailable: boolean;

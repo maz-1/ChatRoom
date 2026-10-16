@@ -60,6 +60,7 @@ public static class ConfigValidator
         ValidateServer(config, issues);
         ValidateAuth(config, issues);
         ValidateHttp(config, issues);
+        ValidateJs2ray(config, issues);
         ValidateOperations(config, issues);
         ValidateProcess(config, issues);
         ValidateMcp(config, issues);
@@ -160,6 +161,28 @@ public static class ConfigValidator
 
     private static void ValidateOperations(ChatRoomConfig config, List<ValidationIssue> issues) =>
         ValidateRange(config.Operations.MaxPayloadBytes, "operations.maxPayloadBytes", SmallBytesMin, PayloadBytesMax, issues);
+
+    private static void ValidateJs2ray(ChatRoomConfig config, List<ValidationIssue> issues)
+    {
+        var settings = config.Js2ray;
+        RequireNonEmpty(settings.Reverse.BridgeTag, "js2ray.reverse.bridgeTag", "Bridge tag", issues);
+        RequireNonEmpty(settings.Reverse.LocalOutboundTag, "js2ray.reverse.localOutboundTag", "本地服务出站 tag", issues);
+        if (settings.Enabled && string.IsNullOrWhiteSpace(settings.ConfigPath))
+            issues.Add(Error("js2ray.configPath", "启用 js2ray 时必须指定运行时 JSON 配置文件。"));
+        if (settings.ConfigPath is not null && settings.ConfigPath.Length == 0)
+            issues.Add(Error("js2ray.configPath", "路径必须为非空字符串或 null。"));
+        foreach (var entry in new[] {
+            (Value: settings.OutboundTag, Path: "js2ray.outboundTag"),
+            (Value: settings.Reverse.BridgeTag, Path: "js2ray.reverse.bridgeTag"),
+            (Value: settings.Reverse.LocalOutboundTag, Path: "js2ray.reverse.localOutboundTag") })
+            if (entry.Value is not null && !Regex.IsMatch(entry.Value, "^[A-Za-z0-9_.-]{1,128}$"))
+                issues.Add(Error(entry.Path, "tag 仅允许 1 到 128 个英文字母、数字、下划线、点或连字符。"));
+        RequireNonEmpty(settings.Reverse.TargetHost, "js2ray.reverse.targetHost", "反代目标主机", issues);
+        ValidateRange(settings.Reverse.TargetPort, "js2ray.reverse.targetPort", PortMin, PortMax, issues);
+        if (settings.Reverse.Enabled && (!settings.Enabled ||
+            string.IsNullOrEmpty(config.Auth.McpPublicBaseUrl) && string.IsNullOrEmpty(config.Auth.WebPublicBaseUrl)))
+            issues.Add(Error("js2ray.reverse.enabled", "反代需要启用 js2ray，并在服务与认证中设置 MCP 或 WebUI 公网地址。"));
+    }
 
     private static void ValidateProcess(ChatRoomConfig config, List<ValidationIssue> issues)
     {

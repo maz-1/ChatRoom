@@ -18,6 +18,7 @@ import { createWorkspacePlugin } from "#plugins/workspace/plugin";
 import { createGitPlugin } from "#plugins/git/plugin";
 import { createProcessPlugin, ProcessService } from "#plugins/process/plugin";
 import { createHttpPlugin, HttpFetcherToken } from "#plugins/http/plugin";
+import { createJs2rayPlugin, Js2rayService } from "#plugins/js2ray/plugin";
 import {
   createMcpProxyPlugin,
   McpProxyServiceToken,
@@ -47,6 +48,7 @@ export interface ApplicationComponents {
   fetcher: import("#plugins/http/http-fetcher").HttpFetcher;
   mcpProxy: import("#plugins/mcp-proxy/mcp-proxy-service").McpProxyService;
   cloud: import("#plugins/cloud/controller").CloudController;
+  js2ray: import("#plugins/js2ray/controller").Js2rayController;
   computer: import("#plugins/computer/computer-service").ComputerService;
   http: HttpServer;
   logs: LogService;
@@ -94,7 +96,10 @@ export async function createApplication(
         createWorkspacePlugin(),
         createGitPlugin(),
         createProcessPlugin(),
-        createHttpPlugin(),
+        createJs2rayPlugin(),
+        createHttpPlugin((timeoutMs) =>
+          services.require(Js2rayService).createDispatcher(timeoutMs),
+        ),
         createMcpProxyPlugin(new McpServerSettingsRepository(database)),
         createComputerPlugin(),
         createCloudPlugin(),
@@ -107,6 +112,7 @@ export async function createApplication(
     const fetcher = services.require(HttpFetcherToken);
     const mcpProxy = services.require(McpProxyServiceToken);
     const cloud = services.require(CloudService);
+    const js2ray = services.require(Js2rayService);
     const computer = services.require(ComputerServiceToken);
     const mcp = createChatRoomMcpHandler(plugins);
     const http = new HttpServer(
@@ -120,6 +126,7 @@ export async function createApplication(
       cloud,
       logs,
     );
+    js2ray.setReverseHandler(() => http.createReverseStream());
     return {
       database,
       eventBus,
@@ -130,6 +137,7 @@ export async function createApplication(
       fetcher,
       mcpProxy,
       cloud,
+      js2ray,
       computer,
       http,
       logs,

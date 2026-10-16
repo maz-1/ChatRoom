@@ -5,10 +5,7 @@ import type {
   ToolCallback,
   CallToolResult,
 } from "@modelcontextprotocol/server";
-import {
-  asChatRoomError,
-  ChatRoomError,
-} from "#core/errors/chatroom-error";
+import { asChatRoomError, ChatRoomError } from "#core/errors/chatroom-error";
 import type { OperationLog } from "#operations/operation-log";
 import { currentMcpOAuthClient } from "./request-context.js";
 import { mcpTool } from "./tool-support.js";

@@ -17,7 +17,7 @@ export const httpRequestSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Optional proxy URL using http://, https://, or socks5://. Authentication is not supported. Omit for a direct connection.",
+      "Set js2ray (or v2ray) for the configured in-process runtime, or use an http://, https://, or socks5:// proxy URL without authentication. Omit for a direct connection. js2ray follows its configured routing rules.",
     ),
   method: z.enum(HTTP_METHODS).default("GET"),
   headers: z.record(z.string(), z.string()).optional(),

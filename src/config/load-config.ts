@@ -1,4 +1,11 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
@@ -10,6 +17,7 @@ import {
 } from "#infrastructure/security/owner-token-store";
 import { platformPaths } from "./platform-paths.js";
 import type { ChatRoomConfig } from "./types.js";
+import { defaultJs2rayConfig, js2rayConfigSchema } from "./js2ray-config.js";
 
 const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -90,6 +98,7 @@ function rawConfigSchema() {
         })
         .strict()
         .default(defaults.operations),
+      js2ray: js2rayConfigSchema(),
       mcp: z
         .object({
           callTimeoutMs: z
@@ -181,6 +190,7 @@ export function defaultConfig(): ChatRoomConfig {
       maxResponseBytes: 1024 * 1024,
     },
     operations: { maxPayloadBytes: 512 * 1024 },
+    js2ray: defaultJs2rayConfig(),
     mcp: {
       callTimeoutMs: 60_000,
       maxResultBytes: 1024 * 1024,
@@ -209,7 +219,7 @@ export async function loadConfig(
   configPath = defaultConfigPath(),
 ): Promise<ChatRoomConfig> {
   const parsed = await readConfigDocument(configPath);
-  const { config } = validateConfig(parsed);
+  const { config } = validateConfig(parsed, configPath);
   validateRuntimeSecurity(config);
   return config;
 }
@@ -219,7 +229,7 @@ export async function loadRuntimeConfig(
   tokenStore: OwnerTokenStore = systemOwnerTokenStore,
 ): Promise<RuntimeConfig> {
   const parsed = await readConfigDocument(configPath);
-  const validated = validateConfig(parsed);
+  const validated = validateConfig(parsed, configPath);
   validateRuntimeSecurity(validated.config);
   const tokenRequired = authenticationUsesOwnerToken(validated.config);
 
@@ -304,7 +314,7 @@ async function readConfigDocument(configPath: string): Promise<unknown> {
   }
 }
 
-function validateConfig(value: unknown): ValidatedConfig {
+function validateConfig(value: unknown, configPath: string): ValidatedConfig {
   assertSupportedMcpTransports(value);
   const result = rawConfigSchema().safeParse(value);
   if (!result.success)
@@ -321,6 +331,15 @@ function validateConfig(value: unknown): ValidatedConfig {
     config: {
       ...result.data,
       auth,
+      js2ray: {
+        ...result.data.js2ray,
+        configPath: result.data.js2ray.configPath
+          ? path.resolve(
+              path.dirname(path.resolve(configPath)),
+              result.data.js2ray.configPath,
+            )
+          : null,
+      },
       allowedRoots: result.data.allowedRoots.map((root) => path.resolve(root)),
       dataDir,
       databasePath: path.resolve(
@@ -377,7 +396,9 @@ async function writeConfigDocument(
   value: unknown,
 ): Promise<void> {
   const temporary = `${configPath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, {
+    mode: 0o600,
+  });
   await chmod(temporary, 0o600).catch(() => undefined);
   try {
     await rename(temporary, configPath);
@@ -413,6 +434,20 @@ function serverEntries(value: unknown): Record<string, unknown> {
 }
 
 function validateRuntimeSecurity(config: ChatRoomConfig): void {
+  if (config.js2ray.enabled && !config.js2ray.configPath)
+    throw new ChatRoomError(
+      "INVALID_INPUT",
+      "js2ray.configPath is required when js2ray is enabled",
+    );
+  if (
+    config.js2ray.reverse.enabled &&
+    (!config.js2ray.enabled ||
+      !(config.auth.mcpPublicBaseUrl || config.auth.webPublicBaseUrl))
+  )
+    throw new ChatRoomError(
+      "INVALID_INPUT",
+      "js2ray reverse requires js2ray.enabled and a configured public MCP or WebUI origin",
+    );
   validatePublicBaseUrl(config.auth.mcpPublicBaseUrl, "auth.mcpPublicBaseUrl");
   validatePublicBaseUrl(config.auth.webPublicBaseUrl, "auth.webPublicBaseUrl");
 

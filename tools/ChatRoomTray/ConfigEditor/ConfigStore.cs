@@ -308,6 +308,9 @@ public static class ConfigStore
             if (!(property.Value is JObject section)) continue;
             CollectUnknown(section, known, property.Name, unknown);
             if (property.Name == "mcp") CollectUnknownMcpServers(section, unknown);
+            if (property.Name == "js2ray" && section["reverse"] is JObject reverse)
+                CollectUnknown(reverse, new HashSet<string>(StringComparer.Ordinal)
+                { "enabled", "bridgeTag", "localOutboundTag", "targetHost", "targetPort" }, "js2ray.reverse", unknown);
         }
 
         return unknown;
@@ -345,7 +348,7 @@ public static class ConfigStore
     private static readonly HashSet<string> KnownRootKeys = new HashSet<string>(StringComparer.Ordinal)
     {
         "allowedRoots", "dataDir", "databasePath", "server", "auth",
-        "http", "operations", "mcp", "process",
+        "http", "operations", "mcp", "process", "js2ray",
     };
 
     private static readonly Dictionary<string, HashSet<string>> KnownSections =
@@ -360,6 +363,10 @@ public static class ConfigStore
             ["http"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "defaultTimeoutMs", "maxTimeoutMs", "maxResponseBytes",
+            },
+            ["js2ray"] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "enabled", "configPath", "outboundTag", "reverse",
             },
             ["operations"] = new HashSet<string>(StringComparer.Ordinal) { "maxPayloadBytes" },
             ["mcp"] = new HashSet<string>(StringComparer.Ordinal)

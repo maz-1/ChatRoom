@@ -62,6 +62,7 @@ Linux GUI 需要 GTK3；真实 tray 需要 `libayatana-appindicator3`/`libappind
 | 服务与认证 | `server.host` / `server.port`、`auth.localWebAuth`、`mcpPublicBaseUrl`、`webPublicBaseUrl`、`allowedRedirectHosts`，以及系统凭据库中的 `ownerToken` |
 | 限额 | `http.*`、`operations.maxPayloadBytes`、`process.*`、`mcp.callTimeoutMs`、`mcp.maxResultBytes` |
 | MCP 服务 | `mcp.servers` 的**增删改**：`stdio`（命令/参数/环境变量/工作目录）与 `http`（URL/请求头/代理） |
+| js2ray | `enabled`、节点配置路径、固定出站 tag，以及反代 Bridge、本地服务 tag 和 Portal 业务目标 |
 
 `mcp.servers` 的条目支持 `stdio` 和 `http`。`stdio` 参数使用 argv 列表编辑器；“完整命令…”按当前系统解析：Windows 使用 `CommandLineToArgvW`，Linux/macOS 使用支持单引号、双引号、反斜杠转义与空参数的 shell-like parser。`http` 请求头按键/值编辑，“填写 Auth Token…”会写成 `Authorization: Bearer <token>`。
 

@@ -47,6 +47,7 @@ export class ApplicationLifecycle {
         this.secrets,
       );
       await components.http.start();
+      await components.js2ray.start();
       await components.cloud.start();
       this.components = components;
       this.logs.info("app", "app.started", "ChatRoom started", {
@@ -120,6 +121,11 @@ async function cleanupComponents(
   components: ApplicationComponents,
 ): Promise<void> {
   const errors: unknown[] = [];
+  try {
+    await components.js2ray.stop();
+  } catch (error) {
+    errors.push(error);
+  }
   try {
     await components.http.close();
   } catch (error) {

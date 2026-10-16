@@ -51,7 +51,10 @@ async function printOwnerToken(): Promise<void> {
   // plaintext auth.ownerToken before revealing the secret on explicit request.
   const { ownerToken } = await loadRuntimeConfig();
   if (!ownerToken)
-    throw new ChatRoomError("NOT_FOUND", "No owner token is stored for ChatRoom");
+    throw new ChatRoomError(
+      "NOT_FOUND",
+      "No owner token is stored for ChatRoom",
+    );
   console.log(ownerToken);
 }
 
