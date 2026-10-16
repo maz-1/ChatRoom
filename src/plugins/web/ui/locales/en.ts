@@ -24,7 +24,7 @@ export const enChatRoom = {
     active: "Active transports",
     sessions: "Sessions",
     noReverse: "No reverse tunnels are configured.",
-    hint: "Active transports indicate a control connection; public service reachability is checked separately. HTTP requests follow the configured routing rules.",
+    hint: "HTTP requests follow the configured routing rules.",
     error: "Last error",
     states: {
       disabled: "Disabled",

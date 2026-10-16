@@ -26,7 +26,7 @@ export const zhChatRoom: typeof enChatRoom = {
     active: "活动承载",
     sessions: "会话数",
     noReverse: "当前没有配置反向隧道。",
-    hint: "活动承载表示控制通道已连接，公网服务的可达性需要另行验证。HTTP 请求遵循节点配置中的分流规则。",
+    hint: "HTTP 请求遵循节点配置中的分流规则。",
     error: "最近错误",
     states: {
       disabled: "已禁用",
