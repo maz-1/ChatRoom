@@ -30,7 +30,7 @@ function rawConfigSchema() {
         .min(1)
         .default(defaults.allowedRoots),
       dataDir: z.string().min(1).default(defaults.dataDir),
-      databasePath: z.string().min(1),
+      databasePath: z.string().min(1).optional(),
       server: z
         .object({
           host: z.string().min(1).default(defaults.server.host),
