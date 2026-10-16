@@ -12,13 +12,15 @@ export class OAuthRepository implements OAuthStateRepository {
   createClient(client: OAuthClientRecord): void {
     this.database.raw
       .prepare(
-        "INSERT INTO oauth_clients(client_id,name,redirect_uris_json,created_at) VALUES(?,?,?,?)",
+        "INSERT INTO oauth_clients(client_id,name,redirect_uris_json,created_at,disabled_at,note) VALUES(?,?,?,?,?,?)",
       )
       .run(
         client.clientId,
         client.name,
         JSON.stringify(client.redirectUris),
         client.createdAt,
+        client.disabledAt,
+        client.note,
       );
   }
 
@@ -27,6 +29,38 @@ export class OAuthRepository implements OAuthStateRepository {
       .prepare("SELECT * FROM oauth_clients WHERE client_id=?")
       .get(clientId) as OAuthClientRow | undefined;
     return row ? clientFromRow(row) : null;
+  }
+
+  listClients(): OAuthClientRecord[] {
+    return (
+      this.database.raw
+        .prepare("SELECT * FROM oauth_clients ORDER BY created_at DESC")
+        .all() as unknown as OAuthClientRow[]
+    ).map(clientFromRow);
+  }
+
+  setClientDisabled(
+    clientId: string,
+    disabledAt: string | null,
+  ): OAuthClientRecord | null {
+    const updated = this.database.raw
+      .prepare("UPDATE oauth_clients SET disabled_at=? WHERE client_id=?")
+      .run(disabledAt, clientId);
+    return Number(updated.changes) === 1 ? this.getClient(clientId) : null;
+  }
+
+  setClientNote(clientId: string, note: string): OAuthClientRecord | null {
+    const updated = this.database.raw
+      .prepare("UPDATE oauth_clients SET note=? WHERE client_id=?")
+      .run(note, clientId);
+    return Number(updated.changes) === 1 ? this.getClient(clientId) : null;
+  }
+
+  deleteClient(clientId: string): boolean {
+    const deleted = this.database.raw
+      .prepare("DELETE FROM oauth_clients WHERE client_id=?")
+      .run(clientId);
+    return Number(deleted.changes) === 1;
   }
 
   createCode(code: OAuthCodeRecord): void {
@@ -200,6 +234,8 @@ interface OAuthClientRow {
   name: string;
   redirect_uris_json: string;
   created_at: string;
+  disabled_at: string | null;
+  note: string;
 }
 
 interface OAuthCodeRow {
@@ -218,6 +254,8 @@ function clientFromRow(row: OAuthClientRow): OAuthClientRecord {
     name: row.name,
     redirectUris: JSON.parse(row.redirect_uris_json) as string[],
     createdAt: row.created_at,
+    disabledAt: row.disabled_at,
+    note: row.note,
   };
 }
 

@@ -26,6 +26,8 @@ import {
   mcpAuthentication,
   webMutationOrigin,
 } from "./ingress-middleware.js";
+import { oauthClientContextForRequest } from "./mcp-auth-context.js";
+import { ReverseIngress } from "./reverse-ingress.js";
 
 const WEB_UI_RESERVED_PREFIXES = [
   "/api",
@@ -40,6 +42,7 @@ export class HttpServer {
   private readonly ingress: IngressPolicy;
   private readonly startedAt = Date.now();
   private mcpRequestCount = 0;
+  private reverse: ReverseIngress | null = null;
 
   constructor(
     private readonly config: ChatRoomConfig,
@@ -96,9 +99,11 @@ export class HttpServer {
       mcpAuthentication(this.auth, this.ingress),
       (req, res) => {
         const scope = this.ingress.isRemoteMcp(req) ? "remote" : "local";
-        runWithMcpAccessScope(scope, () => {
-          void nodeMcp(req, res, req.body);
-        });
+        runWithMcpAccessScope(
+          scope,
+          () => void nodeMcp(req, res, req.body),
+          oauthClientContextForRequest(req, this.auth),
+        );
       },
     );
 
@@ -127,6 +132,8 @@ export class HttpServer {
       });
     }
     app.use(errorMiddleware);
+    if (this.config.js2ray.reverse.enabled)
+      this.reverse = new ReverseIngress(app, this.config.auth);
     this.server = createServer(app);
     try {
       await new Promise<void>((resolve, reject) => {
@@ -162,7 +169,14 @@ export class HttpServer {
     return value && typeof value === "object" ? value : null;
   }
 
+  createReverseStream(): import("node:stream").Duplex {
+    if (!this.reverse) throw new Error("js2ray reverse ingress is not enabled");
+    return this.reverse.createStream();
+  }
+
   async close(): Promise<void> {
+    this.reverse?.close();
+    this.reverse = null;
     const server = this.server;
     if (!server) return;
     this.server = null;

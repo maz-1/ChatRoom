@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ChatRoomConfig } from "../../src/config/types.js";
+import { defaultJs2rayConfig } from "../../src/config/js2ray-config.js";
 import { FileLogStore } from "../../src/infrastructure/logging/file-log-store.js";
 import { SystemLog } from "../../src/infrastructure/logging/system-log.js";
 import {
@@ -38,12 +39,22 @@ export async function createTestRuntime(
     server: { host: "127.0.0.1", port: options.port ?? 0 },
     auth: {
       localWebAuth: false,
-      ownerToken: "test-owner-token",
       mcpPublicBaseUrl: null,
       webPublicBaseUrl: null,
       allowedRedirectHosts: ["localhost", "127.0.0.1"],
     },
+    http: {
+      defaultTimeoutMs: 5_000,
+      maxTimeoutMs: 10_000,
+      maxResponseBytes: 16 * 1024,
+    },
     operations: { maxPayloadBytes: 16 * 1024 },
+    js2ray: defaultJs2rayConfig(),
+    mcp: {
+      callTimeoutMs: 5_000,
+      maxResultBytes: 16 * 1024,
+      servers: {},
+    },
     process: {
       maxOutputBytes: options.maxOutputBytes ?? 16 * 1024,
       defaultTimeoutMs: 10_000,
@@ -52,13 +63,16 @@ export async function createTestRuntime(
   };
   options.configure?.(config);
   const logs = new SystemLog(new FileLogStore(dataDir));
-  const components = await createApplication(config, logs);
+  const components = await createApplication(config, logs, {
+    ownerToken: "test-owner-token",
+  });
   return {
     root,
     workspaceRoot,
     config,
     components,
     cleanup: async () => {
+      await components.js2ray.stop().catch(() => undefined);
       await components.http.close().catch(() => undefined);
       await components.plugins.stop().catch(() => undefined);
       try {

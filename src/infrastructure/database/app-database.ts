@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { migrateDatabase } from "./migrations.js";
 import { DATABASE_SCHEMA } from "./schema.js";
 
 export class AppDatabase {
@@ -13,6 +14,7 @@ export class AppDatabase {
       this.raw.exec(
         "PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;",
       );
+      migrateDatabase(this.raw);
       this.raw.exec(DATABASE_SCHEMA);
     } catch (error) {
       this.raw.close();

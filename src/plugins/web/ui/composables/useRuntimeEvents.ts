@@ -3,7 +3,7 @@ import { api, type RuntimeStatus, type UpdateStatus } from "../api.js";
 import { createRequestGate } from "../utils/requests.js";
 
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
-type RefreshScope = "processes" | "operations" | "computer" | "agents";
+type RefreshScope = "processes" | "operations" | "computer" | "agents" | "mcp";
 
 export interface ProcessRefreshHint {
   processId: string;
@@ -54,7 +54,8 @@ type RuntimeEvent =
       deleted?: boolean;
     }
   | { type: "computer-settings" }
-  | { type: "computer-snapshot"; snapshotId: string };
+  | { type: "computer-snapshot"; snapshotId: string }
+  | { type: "mcp-servers" };
 
 const EVENT_COALESCE_MS = 100;
 const RUNTIME_POLL_MS = 15_000;
@@ -67,6 +68,7 @@ export function useRuntimeEvents() {
   const operationRevision = shallowRef(0);
   const computerRevision = shallowRef(0);
   const agentRevision = shallowRef(0);
+  const mcpRevision = shallowRef(0);
   const processChanges = shallowRef<ProcessRefreshHint[] | null>([]);
   const operationChanges = shallowRef<OperationRefreshBatch | null>({
     changes: [],
@@ -203,6 +205,9 @@ export function useRuntimeEvents() {
           pendingComputerPreviewSnapshotId = event.snapshotId;
           scheduleRefresh("computer");
           break;
+        case "mcp-servers":
+          scheduleRefresh("mcp");
+          break;
       }
     });
   }
@@ -216,6 +221,7 @@ export function useRuntimeEvents() {
     scheduleRefresh("operations");
     scheduleRefresh("computer");
     scheduleRefresh("agents");
+    scheduleRefresh("mcp");
   }
 
   function mergeProcessChange(
@@ -253,6 +259,7 @@ export function useRuntimeEvents() {
 
   function flushRefreshes() {
     flushTimer = null;
+    if (pendingScopes.delete("mcp")) mcpRevision.value += 1;
 
     if (pendingScopes.delete("processes")) {
       processChanges.value = pendingGlobalProcessEvent
@@ -412,6 +419,7 @@ export function useRuntimeEvents() {
     computerChanges,
     agentRevision,
     agentChanges,
+    mcpRevision,
     connectionState,
     latencyMs,
     start,

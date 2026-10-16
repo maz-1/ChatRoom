@@ -8,7 +8,7 @@
   English | <a href="./docs/README.zh-CN.md">简体中文</a> | <a href="https://doc.chatroomcp.com/">Documentation</a>
 </p>
 
-ChatRoom is a local MCP runtime that lets ChatGPT work with projects on your local device, run processes, or perform computer control. Its WebUI provides workspace browsing, Git repository and process management, computer control, ChatRoom Cloud management, and plugin-attributed operation logs.
+ChatRoom is a local MCP runtime that lets ChatGPT work with projects on your local device, run processes, send direct HTTP/HTTPS requests, or perform computer control. It can also proxy other MCP servers over stdio and Streamable HTTP, so ChatGPT reaches their tools through ChatRoom. Its WebUI provides workspace browsing, Git repository and process management, computer control, proxied MCP server inspection, ChatRoom Cloud management, and plugin-attributed operation logs.
 
 ## Install
 
@@ -35,13 +35,19 @@ MCP    http://127.0.0.1:8765/mcp
 
 ChatGPT connects to ChatRoom through its MCP endpoint. For remote access, either enable ChatRoom Cloud from the WebUI or expose ChatRoom through your own HTTPS ingress and configure the corresponding public URL.
 
-Create a custom MCP app in ChatGPT Developer Mode, use the ChatRoom `/mcp` URL, and complete OAuth authorization with the `ownerToken` in the [configuration file](https://doc.chatroomcp.com/configuration).
+Create a custom MCP app in ChatGPT Developer Mode, use the ChatRoom `/mcp` URL, and complete OAuth authorization with the owner token stored in your system keychain. Run `chatroom auth token` when you explicitly need to reveal it.
 
 See [Use ChatRoom with ChatGPT](https://doc.chatroomcp.com/chatgpt) for the current ChatGPT setup flow.
 
 ## ChatRoom Cloud
 
 ChatRoom Cloud is built into ChatRoom and provides optional public access for Remote MCP and Remote WebUI. Open the **Cloud** page in the WebUI to purchase, restore, or manage access.
+
+## js2ray proxy
+
+ChatRoom includes an optional in-process js2ray runtime for proxied HTTP requests and Bridge/Portal remote access, without a local proxy listener. Set `proxy: "js2ray"` in `http_request` after configuring the runtime. See [configuration and reverse setup](docs/js2ray.zh-CN.md).
+
+Source builds require `git submodule update --init --recursive` before `npm ci`. Published npm packages include the pinned runtime snapshot.
 
 ## Documentation
 

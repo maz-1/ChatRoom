@@ -1,6 +1,7 @@
 import type { OperationLog } from "#operations/operation-log";
 import type { ComputerService } from "#plugins/computer/computer-service";
 import type { GitAccess } from "#app/git-access";
+import type { McpProxyService } from "#plugins/mcp-proxy/mcp-proxy-service";
 import type { ProcessSupervisor } from "#plugins/process/process-supervisor";
 import type { WorkspaceService } from "#plugins/workspace/workspace-service";
 import type { AgentRuntime } from "#plugins/agent/runtime";
@@ -14,7 +15,9 @@ export class WebRuntime {
     readonly processes: ProcessSupervisor,
     readonly computer: ComputerService,
     readonly agents: AgentRuntime,
+    readonly mcpProxy: McpProxyService,
     readonly mcpTools: McpToolControl,
+    readonly js2ray: import("#plugins/js2ray/controller").Js2rayController,
   ) {}
 
   processKill(processId: string, force = false) {

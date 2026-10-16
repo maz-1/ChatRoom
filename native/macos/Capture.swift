@@ -197,24 +197,54 @@ final class CaptureController {
     }
 
     private func encode(_ image: CGImage) throws -> ScreenshotPayload {
+        if let data = encodeImage(
+            image,
+            type: UTType.webP.identifier as CFString,
+            quality: 0.85
+        ) {
+            return ScreenshotPayload(
+                mimeType: "image/webp",
+                data: data.base64EncodedString()
+            )
+        }
+
+        if let data = encodeImage(
+            image,
+            type: UTType.jpeg.identifier as CFString,
+            quality: 0.85
+        ) {
+            return ScreenshotPayload(
+                mimeType: "image/jpeg",
+                data: data.base64EncodedString()
+            )
+        }
+
+        throw NativeFailure.internalError("WebP and JPEG screenshot encoders are unavailable")
+    }
+
+    private func encodeImage(
+        _ image: CGImage,
+        type: CFString,
+        quality: CGFloat
+    ) -> Data? {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             data as CFMutableData,
-            UTType.jpeg.identifier as CFString,
+            type,
             1,
             nil
         ) else {
-            throw NativeFailure.internalError("JPEG encoder is unavailable")
+            return nil
         }
         CGImageDestinationAddImage(
             destination,
             image,
-            [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
         )
         guard CGImageDestinationFinalize(destination) else {
-            throw NativeFailure.internalError("JPEG encode failed")
+            return nil
         }
-        return ScreenshotPayload(mimeType: "image/jpeg", data: (data as Data).base64EncodedString())
+        return data as Data
     }
 
     private func windowDistance(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {

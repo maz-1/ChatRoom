@@ -37,6 +37,7 @@ import type {
   AgentTokenUsage,
 } from "../../src/plugins/agent/types.js";
 import { WorkspaceService } from "../../src/plugins/workspace/workspace-service.js";
+import { WorkspaceBlacklistRepository } from "../../src/plugins/workspace/workspace-blacklist-repository.js";
 
 const defaultConfig: AgentSessionConfig = {
   model: null,
@@ -373,7 +374,11 @@ async function createRuntimeFixture(
   const repository = new AgentRepository(database);
   const runtime = new AgentRuntime(
     repository,
-    await WorkspaceService.create([root], { projectFiles: async () => null }),
+    await WorkspaceService.create(
+      [root],
+      { projectFiles: async () => null },
+      new WorkspaceBlacklistRepository(database),
+    ),
     events,
     [provider, ...additionalProviders],
   );
@@ -670,9 +675,11 @@ test("AgentRuntime persists independent provider settings and usage across switc
     const nextSecondary = new StreamingProvider("secondary");
     restarted = new AgentRuntime(
       repository,
-      await WorkspaceService.create([fixture.root], {
-        projectFiles: async () => null,
-      }),
+      await WorkspaceService.create(
+        [fixture.root],
+        { projectFiles: async () => null },
+        new WorkspaceBlacklistRepository(fixture.database),
+      ),
       fixture.events,
       [nextCodex, nextSecondary],
     );

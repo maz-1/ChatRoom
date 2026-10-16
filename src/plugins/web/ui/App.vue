@@ -39,6 +39,7 @@ const {
   computerChanges,
   agentRevision,
   agentChanges,
+  mcpRevision,
   connectionState,
   latencyMs,
 } = runtimeState;
@@ -91,6 +92,8 @@ const currentProps = computed<Record<string, unknown>>(() => {
         revision: agentRevision.value,
         changes: agentChanges.value,
       };
+    case "mcp-servers":
+      return { revision: mcpRevision.value };
     default:
       return {};
   }

@@ -5,6 +5,7 @@ import { SystemLog } from "#infrastructure/logging/system-log";
 import {
   createApplication,
   type ApplicationComponents,
+  type RuntimeSecrets,
 } from "./application.js";
 
 export class ApplicationLifecycle {
@@ -13,7 +14,10 @@ export class ApplicationLifecycle {
   private shuttingDown: Promise<void> | null = null;
   private readonly logs: SystemLog;
 
-  constructor(private readonly config: ChatRoomConfig) {
+  constructor(
+    private readonly config: ChatRoomConfig,
+    private readonly secrets: RuntimeSecrets,
+  ) {
     this.logs = new SystemLog(new FileLogStore(config.dataDir));
   }
 
@@ -37,8 +41,13 @@ export class ApplicationLifecycle {
     });
     let components: ApplicationComponents | null = null;
     try {
-      components = await createApplication(this.config, this.logs);
+      components = await createApplication(
+        this.config,
+        this.logs,
+        this.secrets,
+      );
       await components.http.start();
+      await components.js2ray.start();
       await components.cloud.start();
       this.components = components;
       this.logs.info("app", "app.started", "ChatRoom started", {
@@ -112,6 +121,11 @@ async function cleanupComponents(
   components: ApplicationComponents,
 ): Promise<void> {
   const errors: unknown[] = [];
+  try {
+    await components.js2ray.stop();
+  } catch (error) {
+    errors.push(error);
+  }
   try {
     await components.http.close();
   } catch (error) {

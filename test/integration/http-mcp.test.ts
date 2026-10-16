@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
+import type { LogRecord } from "../../src/core/logging/types.js";
+import { OAuthRepository } from "../../src/infrastructure/database/oauth-repository.js";
 import { createTestRuntime } from "../helpers/runtime.js";
 
 test("MCP accepts 2025-era initialization in stateless mode", async () => {
@@ -177,6 +179,284 @@ test("remote WebUI mutations require same-origin while loopback WebUI stays loca
       headers: { cookie, origin: "https://chatroom.example.com" },
     });
     assert.equal(sameOrigin.status, 200);
+  } finally {
+    await runtime.cleanup();
+  }
+});
+
+test("OAuth client registration logs accepted and rejected remote requests", async () => {
+  const runtime = await createTestRuntime({
+    configure(config) {
+      config.auth.mcpPublicBaseUrl = "https://mcp.example.com";
+    },
+  });
+  const registrationLogs: LogRecord[] = [];
+  const unsubscribeLogs = runtime.components.logs.subscribe((record) => {
+    if (
+      record.event === "oauth.registration_accepted" ||
+      record.event === "oauth.registration_rejected"
+    )
+      registrationLogs.push(record);
+  });
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+
+    const accepted = await requestWithHost(address.port, "/oauth/register", {
+      method: "POST",
+      host: "mcp.example.com",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "remote-mcp-test/1.0",
+      },
+      body: JSON.stringify({
+        client_name: "Remote MCP Test",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(accepted.status, 201);
+    const registered = JSON.parse(accepted.body) as { client_id: string };
+    const authorizeParams = new URLSearchParams({
+      response_type: "code",
+      client_id: registered.client_id,
+      redirect_uri: "http://127.0.0.1/callback",
+      code_challenge: "A".repeat(43),
+      code_challenge_method: "S256",
+      scope: "mcp",
+    });
+    const authorization = await requestWithHost(
+      address.port,
+      `/oauth/authorize?${authorizeParams}`,
+      { method: "GET", host: "mcp.example.com" },
+    );
+    assert.equal(authorization.status, 200);
+    assert.match(authorization.body, /addEventListener\("paste"/);
+    assert.match(authorization.body, /event\.preventDefault\(\)/);
+    assert.match(authorization.body, /navigator\.clipboard\.writeText\(""\)/);
+
+    const acceptedLog = registrationLogs.find(
+      (record) => record.event === "oauth.registration_accepted",
+    );
+    assert.ok(acceptedLog);
+    assertRegistrationLog({
+      value: acceptedLog.data,
+      clientName: "Remote MCP Test",
+      redirectUris: ["http://127.0.0.1/callback"],
+      host: "mcp.example.com",
+      userAgent: "remote-mcp-test/1.0",
+      externalMcp: true,
+    });
+
+    const rejected = await requestWithHost(address.port, "/oauth/register", {
+      method: "POST",
+      host: "mcp.example.com",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "rejected-mcp-test/1.0",
+      },
+      body: JSON.stringify({
+        client_name: "Rejected MCP Test",
+        redirect_uris: ["http://remote.example.com/callback"],
+      }),
+    });
+    assert.equal(rejected.status, 400);
+    const rejectedLog = registrationLogs.find(
+      (record) => record.event === "oauth.registration_rejected",
+    );
+    assert.ok(rejectedLog);
+    const rejectedDetails = rejectedLog.data ?? {};
+    assert.equal(rejectedDetails.clientName, "Rejected MCP Test");
+    assert.deepEqual(rejectedDetails.redirectUris, [
+      "http://remote.example.com/callback",
+    ]);
+    assert.equal(rejectedDetails.host, "mcp.example.com");
+    assert.equal(rejectedDetails.userAgent, "rejected-mcp-test/1.0");
+    assert.equal(rejectedDetails.externalMcp, true);
+    assert.equal(rejectedDetails.error, "FORBIDDEN");
+    assert.equal(
+      rejectedDetails.errorDescription,
+      "OAuth redirects must use HTTPS unless using loopback HTTP",
+    );
+    assert.match(String(rejectedDetails.timestamp), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(typeof rejectedDetails.sourceAddress, "string");
+    assert.equal(typeof rejectedDetails.sourcePort, "number");
+  } finally {
+    unsubscribeLogs();
+    await runtime.cleanup();
+  }
+});
+
+function assertRegistrationLog(input: {
+  value: unknown;
+  clientName: string;
+  redirectUris: string[];
+  host: string;
+  userAgent: string;
+  externalMcp: boolean;
+}): void {
+  const value = input.value as Record<string, unknown>;
+  assert.equal(value.clientName, input.clientName);
+  assert.deepEqual(value.redirectUris, input.redirectUris);
+  assert.equal(value.host, input.host);
+  assert.equal(value.userAgent, input.userAgent);
+  assert.equal(value.externalMcp, input.externalMcp);
+  assert.match(String(value.clientId), /^client_/);
+  assert.match(String(value.timestamp), /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof value.sourceAddress, "string");
+  assert.equal(typeof value.sourcePort, "number");
+}
+
+test("OAuth registration settings API persists the toggle and gates /oauth/register", async () => {
+  const runtime = await createTestRuntime();
+  try {
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    const base = `http://127.0.0.1:${address.port}`;
+    const settingsUrl = `${base}/api/oauth-clients/settings`;
+
+    const initialResponse = await fetch(settingsUrl);
+    assert.equal(initialResponse.status, 200);
+    assert.deepEqual(await initialResponse.json(), {
+      allowNewRegistrations: true,
+    });
+
+    const registerBefore = await fetch(`${base}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Probe",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(registerBefore.status, 201);
+
+    const disableResponse = await fetch(settingsUrl, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ allowNewRegistrations: false }),
+    });
+    assert.equal(disableResponse.status, 200);
+    assert.deepEqual(await disableResponse.json(), {
+      allowNewRegistrations: false,
+    });
+
+    const registerAfter = await fetch(`${base}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Probe",
+        redirect_uris: ["http://127.0.0.1/callback"],
+      }),
+    });
+    assert.equal(registerAfter.status, 400);
+    assert.deepEqual(await registerAfter.json(), {
+      error: "access_denied",
+      error_description: "OAuth client registration is disabled",
+    });
+
+    const invalidResponse = await fetch(settingsUrl, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ allowNewRegistrations: "yes" }),
+    });
+    assert.equal(invalidResponse.status, 400);
+
+    const settings = runtime.components.database.raw
+      .prepare(
+        "SELECT allow_new_registrations FROM oauth_registration_settings WHERE id = 1",
+      )
+      .get() as { allow_new_registrations: number };
+    assert.equal(settings.allow_new_registrations, 0);
+  } finally {
+    await runtime.cleanup();
+  }
+});
+
+test("WebUI OAuth client management API lists, disables, and deletes revoked clients", async () => {
+  const runtime = await createTestRuntime();
+  try {
+    const repository = new OAuthRepository(runtime.components.database);
+    repository.createClient({
+      clientId: "client_webui_test",
+      name: "WebUI Test Client",
+      redirectUris: ["http://127.0.0.1/callback"],
+      createdAt: "2026-09-19T12:00:00.000Z",
+      disabledAt: null,
+      note: "",
+    });
+
+    await runtime.components.http.start();
+    const address = runtime.components.http.address();
+    assert.ok(address);
+    const base = `http://127.0.0.1:${address.port}`;
+
+    const listResponse = await fetch(`${base}/api/oauth-clients`);
+    assert.equal(listResponse.status, 200);
+    const listed = (await listResponse.json()) as {
+      clients: Array<{
+        clientId: string;
+        disabledAt: string | null;
+        note: string;
+        lastAccessAt: string | null;
+      }>;
+    };
+    assert.deepEqual(listed.clients, [
+      {
+        clientId: "client_webui_test",
+        name: "WebUI Test Client",
+        redirectUris: ["http://127.0.0.1/callback"],
+        createdAt: "2026-09-19T12:00:00.000Z",
+        disabledAt: null,
+        note: "",
+        lastAccessAt: null,
+      },
+    ]);
+
+    const noteResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ note: "Primary ChatGPT desktop client" }),
+      },
+    );
+    assert.equal(noteResponse.status, 200);
+    const noted = (await noteResponse.json()) as { note: string };
+    assert.equal(noted.note, "Primary ChatGPT desktop client");
+    assert.equal(
+      repository.getClient("client_webui_test")?.note,
+      "Primary ChatGPT desktop client",
+    );
+
+    const disableResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ disabled: true }),
+      },
+    );
+    assert.equal(disableResponse.status, 200);
+    const disabled = (await disableResponse.json()) as {
+      disabledAt: string | null;
+    };
+    assert.ok(disabled.disabledAt);
+
+    const revokeResponse = await fetch(
+      `${base}/api/oauth-clients/client_webui_test/revoke`,
+      { method: "POST" },
+    );
+    assert.equal(revokeResponse.status, 200);
+    assert.deepEqual(await revokeResponse.json(), {
+      clientId: "client_webui_test",
+    });
+    assert.equal(repository.getClient("client_webui_test"), null);
+
+    const afterDelete = await fetch(`${base}/api/oauth-clients`);
+    assert.equal(afterDelete.status, 200);
+    assert.deepEqual(await afterDelete.json(), { clients: [] });
   } finally {
     await runtime.cleanup();
   }

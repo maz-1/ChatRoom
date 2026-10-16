@@ -8,6 +8,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import type { OAuthStateRepository } from "#core/auth/repository";
 import type { WebSessionRepository } from "#core/auth/session-repository";
+import type { OAuthSettingsRepository } from "#infrastructure/database/oauth-settings-repository";
 import type { ChatRoomConfig } from "#config/types";
 
 export interface AuthorizationRequest {
@@ -19,11 +20,25 @@ export interface AuthorizationRequest {
   state?: string;
 }
 
+export interface OAuthClientSummary {
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  createdAt: string;
+  disabledAt: string | null;
+  note: string;
+  lastAccessAt: string | null;
+}
+
 export class AuthService {
+  private readonly clientLastAccess = new Map<string, string>();
+
   constructor(
     private readonly repository: OAuthStateRepository,
     private readonly sessions: WebSessionRepository,
     private readonly config: ChatRoomConfig["auth"],
+    private readonly ownerToken: string | null,
+    private readonly settings: OAuthSettingsRepository | null = null,
   ) {
     const now = new Date().toISOString();
     repository.prune(now);
@@ -31,12 +46,17 @@ export class AuthService {
   }
 
   private verifyOwnerToken(value: string): boolean {
-    if (!this.config.ownerToken) return false;
+    if (!this.ownerToken) return false;
     // Hash to fixed-length inputs before timingSafeEqual so differing token lengths do not short-circuit comparison.
-    return safeEqual(digest(value), digest(this.config.ownerToken));
+    return safeEqual(digest(value), digest(this.ownerToken));
   }
 
   registerClient(name: string, redirectUris: string[]) {
+    if (this.settings && !this.settings.getRegistrationEnabled())
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        "OAuth client registration is disabled",
+      );
     if (!name || redirectUris.length === 0)
       throw new ChatRoomError(
         "INVALID_INPUT",
@@ -49,6 +69,8 @@ export class AuthService {
       name,
       redirectUris,
       createdAt: new Date().toISOString(),
+      disabledAt: null,
+      note: "",
     });
     return {
       client_id: clientId,
@@ -211,12 +233,81 @@ export class AuthService {
   verifyMcpToken(token: string): AuthInfo | null {
     const info = this.verifyToken(token, "mcp");
     if (!info) return null;
+    const client = this.repository.getClient(info.clientId);
+    if (!client) return null;
+    this.clientLastAccess.set(info.clientId, new Date().toISOString());
     return {
       token,
       clientId: info.clientId,
       scopes: info.scope.split(/\s+/),
       expiresAt: Math.floor(Date.parse(info.expiresAt) / 1000),
     };
+  }
+
+  listOAuthClients(): OAuthClientSummary[] {
+    return this.repository.listClients().map((client) => ({
+      ...client,
+      lastAccessAt: this.clientLastAccess.get(client.clientId) ?? null,
+    }));
+  }
+
+  setOAuthClientDisabled(
+    clientId: string,
+    disabled: boolean,
+  ): OAuthClientSummary {
+    const existing = this.repository.getClient(clientId);
+    if (!existing)
+      throw new ChatRoomError("NOT_FOUND", "OAuth client not found");
+    const updated = this.repository.setClientDisabled(
+      clientId,
+      disabled ? new Date().toISOString() : null,
+    );
+    if (!updated)
+      throw new ChatRoomError("NOT_FOUND", "OAuth client not found");
+    return {
+      ...updated,
+      lastAccessAt: this.clientLastAccess.get(clientId) ?? null,
+    };
+  }
+
+  setOAuthClientNote(clientId: string, note: string): OAuthClientSummary {
+    if (note.length > 1000)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "OAuth client note must be 1000 characters or fewer",
+      );
+    const updated = this.repository.setClientNote(clientId, note.trim());
+    if (!updated)
+      throw new ChatRoomError("NOT_FOUND", "OAuth client not found");
+    return {
+      ...updated,
+      lastAccessAt: this.clientLastAccess.get(clientId) ?? null,
+    };
+  }
+
+  revokeOAuthClient(clientId: string): { clientId: string } {
+    if (!this.repository.deleteClient(clientId))
+      throw new ChatRoomError("NOT_FOUND", "OAuth client not found");
+    this.clientLastAccess.delete(clientId);
+    return { clientId };
+  }
+
+  isOAuthClientDisabled(clientId: string): boolean {
+    return Boolean(this.repository.getClient(clientId)?.disabledAt);
+  }
+
+  isRegistrationEnabled(): boolean {
+    return this.settings ? this.settings.getRegistrationEnabled() : true;
+  }
+
+  setRegistrationEnabled(enabled: boolean): boolean {
+    if (!this.settings)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "OAuth registration settings are unavailable",
+      );
+    this.settings.setRegistrationEnabled(enabled);
+    return this.settings.getRegistrationEnabled();
   }
 
   revoke(token: string): void {
@@ -264,6 +355,9 @@ export class AuthService {
   }
 
   private issueOAuthTokens(clientId: string, scope: string) {
+    const client = this.repository.getClient(clientId);
+    if (!client)
+      throw new ChatRoomError("FORBIDDEN", "OAuth client is unavailable");
     this.repository.prune(new Date().toISOString());
     const access = this.issueAccessToken(clientId, scope, 60 * 60);
     const refreshToken = randomBytes(48).toString("base64url");

@@ -15,10 +15,9 @@ test("workspace document and media preview stream full and byte-range responses 
       path.join(runtime.workspaceRoot, "not-allowed.html"),
       "<script>alert(1)</script>",
     );
-    await symlink(
-      "/etc/hosts",
-      path.join(runtime.workspaceRoot, "outside.pdf"),
-    );
+    const outside = path.join(runtime.root, "outside.pdf");
+    await writeFile(outside, "outside the workspace");
+    await symlink(outside, path.join(runtime.workspaceRoot, "outside.pdf"));
 
     await runtime.components.http.start();
     const address = runtime.components.http.address();

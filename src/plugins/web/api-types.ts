@@ -28,6 +28,10 @@ import type {
   CloudStatus as DomainCloudStatus,
 } from "#plugins/cloud/types";
 import type {
+  McpServerDetail,
+  McpToolSummary as McpProxyToolSummary,
+} from "#plugins/mcp-proxy/types";
+import type {
   ComputerDisplay,
   ComputerPermission,
   ComputerStatus,
@@ -61,6 +65,8 @@ export type {
   GitCommit,
   GitDiff,
   GitStatus,
+  McpProxyToolSummary,
+  McpServerDetail,
   ProcessSnapshot,
   ProcessSummary,
   WorkspaceEntry,
@@ -89,6 +95,16 @@ export interface AuthStatus {
   passkeyRegistered: boolean;
 }
 
+export interface OAuthClientSummary {
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  createdAt: string;
+  disabledAt: string | null;
+  note: string;
+  lastAccessAt: string | null;
+}
+
 export interface PasskeySummary {
   id: string;
   name: string;
@@ -101,6 +117,8 @@ export interface RuntimeStatus {
   uptimeMinutes: number;
 }
 
+export type { Js2rayStatus } from "#plugins/js2ray/types";
+
 export interface UpdateStatus {
   latestVersion: string | null;
   updateAvailable: boolean;
@@ -110,6 +128,12 @@ export interface UpdateStatus {
 export type McpToolSummary = DomainMcpToolSummary;
 export type CloudService = CloudServiceId;
 export type CloudStatus = DomainCloudStatus;
+
+/** MCP bridge view: definitions live in config; enabled state is stored locally. */
+export interface McpServersView {
+  configPath: string;
+  servers: McpServerDetail[];
+}
 
 export interface WorkspaceFileContent {
   content: string;

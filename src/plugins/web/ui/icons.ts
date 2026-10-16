@@ -18,6 +18,7 @@ import {
   mdiDeleteSweepOutline,
   mdiDotsHorizontal,
   mdiDownloadOutline,
+  mdiEyeOffOutline,
   mdiFileCompare,
   mdiFileEyeOutline,
   mdiFileOutline,
@@ -38,6 +39,7 @@ import {
   mdiProgressClock,
   mdiPuzzleOutline,
   mdiRefresh,
+  mdiServerNetwork,
   mdiSourceBranch,
   mdiStop,
   mdiStopCircleOutline,
@@ -51,9 +53,11 @@ import {
   mdiWeatherSunny,
   mdiWrap,
 } from "@mdi/js";
+import V2rayIcon from "./components/V2rayIcon.vue";
 
 export const chatroomIconAliases = {
   mdiAccountOutline,
+  v2ray: V2rayIcon,
   mdiAlertCircleOutline,
   mdiArrowLeft,
   mdiArrowDown,
@@ -72,6 +76,7 @@ export const chatroomIconAliases = {
   mdiDeleteSweepOutline,
   mdiDotsHorizontal,
   mdiDownloadOutline,
+  mdiEyeOffOutline,
   mdiFileCompare,
   mdiFileEyeOutline,
   mdiFileOutline,
@@ -92,6 +97,7 @@ export const chatroomIconAliases = {
   mdiProgressClock,
   mdiPuzzleOutline,
   mdiRefresh,
+  mdiServerNetwork,
   mdiSourceBranch,
   mdiStop,
   mdiStopCircleOutline,

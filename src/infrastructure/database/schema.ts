@@ -1,4 +1,11 @@
+export const DATABASE_SCHEMA_VERSION = 7;
+
 export const DATABASE_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS workspace_blacklist (
+    path_key TEXT PRIMARY KEY,
+    root TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS operations (
     operation_id TEXT PRIMARY KEY,
     plugin_id TEXT NOT NULL,
@@ -23,7 +30,9 @@ export const DATABASE_SCHEMA = `
     client_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     redirect_uris_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    disabled_at TEXT,
+    note TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE IF NOT EXISTS oauth_codes (
     code_hash TEXT PRIMARY KEY,
@@ -149,4 +158,16 @@ export const DATABASE_SCHEMA = `
     updated_at TEXT NOT NULL,
     PRIMARY KEY(session_id, provider)
   );
+  CREATE TABLE IF NOT EXISTS mcp_server_settings (
+    server_name TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_registration_settings (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    allow_new_registrations INTEGER NOT NULL DEFAULT 1 CHECK(allow_new_registrations IN (0, 1)),
+    updated_at TEXT NOT NULL
+  );
+
 `;

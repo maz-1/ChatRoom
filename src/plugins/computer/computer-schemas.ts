@@ -29,8 +29,8 @@ const computerElementSchema = z.object({
   actions: z.array(z.string()),
 });
 
-const computerScreenshotSchema = z.object({
-  mimeType: z.enum(["image/jpeg", "image/png"]),
+export const computerScreenshotSchema = z.object({
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
   data: z.string(),
 });
 

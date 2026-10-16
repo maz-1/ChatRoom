@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Windows keeps the existing WinForms tray on .NET 8 for Windows.
+         Linux/macOS use plain .NET 8 with their Eto backends. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(CrossPlatformEditor)' == 'true'">net8.0</TargetFramework>
+
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0-windows'">WinExe</OutputType>
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">Exe</OutputType>
+    <AssemblyName>ChatRoomTray</AssemblyName>
+    <RootNamespace>ChatRoomTray</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>chatgpt.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefineConstants>$(DefineConstants);WINDOWS_TRAY</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <EtoPlatform Condition="'$(EtoPlatform)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">Mac64</EtoPlatform>
+    <EtoPlatform Condition="'$(EtoPlatform)' == ''">Gtk</EtoPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="chatgpt.ico" LogicalName="ChatRoomTray.chatgpt.ico" />
+    <EmbeddedResource Include="chatgpt.png" LogicalName="ChatRoomTray.chatgpt.png" />
+    <PackageReference Include="Eto.Forms" Version="2.11.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="Eto.Platform.Windows" Version="2.11.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0' and '$(EtoPlatform)' == 'Gtk'">
+    <DefineConstants>$(DefineConstants);LINUX_TRAY</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' and '$(EtoPlatform)' == 'Gtk'">
+    <PackageReference Include="Eto.Platform.Gtk" Version="2.11.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0' and '$(EtoPlatform)' == 'Mac64'">
+    <RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
+    <DefineConstants>$(DefineConstants);MACOS_TRAY</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' and '$(EtoPlatform)' == 'Mac64'">
+    <PackageReference Include="Eto.Platform.Mac64" Version="2.11.0" />
+    <Content Include="Icon.icns" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'net8.0-windows'">
+    <Compile Remove="StartupArgsDialog.cs" />
+    <Compile Remove="TrayApplicationContext.cs" />
+  </ItemGroup>
+
+</Project>

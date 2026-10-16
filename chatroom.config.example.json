@@ -8,13 +8,49 @@
   },
   "auth": {
     "localWebAuth": false,
-    "ownerToken": null,
     "mcpPublicBaseUrl": null,
     "webPublicBaseUrl": null,
     "allowedRedirectHosts": ["chatgpt.com", "localhost", "127.0.0.1"]
   },
+  "http": {
+    "defaultTimeoutMs": 30000,
+    "maxTimeoutMs": 120000,
+    "maxResponseBytes": 1048576
+  },
   "operations": {
     "maxPayloadBytes": 524288
+  },
+  "js2ray": {
+    "enabled": false,
+    "configPath": null,
+    "outboundTag": null,
+    "reverse": {
+      "enabled": false,
+      "bridgeTag": "bridge",
+      "localOutboundTag": "mcp-local",
+      "targetHost": "127.0.0.1",
+      "targetPort": 8765
+    }
+  },
+  "mcp": {
+    "callTimeoutMs": 60000,
+    "maxResultBytes": 1048576,
+    "servers": {
+      "filesystem": {
+        "type": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "/home/user/Projects"
+        ]
+      },
+      "remote": {
+        "type": "http",
+        "url": "https://mcp.example.com/mcp",
+        "headers": { "authorization": "Bearer replace-me" }
+      }
+    }
   },
   "process": {
     "maxOutputBytes": 524288,

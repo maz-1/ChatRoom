@@ -14,8 +14,11 @@ export type View =
   | "agents"
   | "processes"
   | "computer"
+  | "mcp-servers"
   | "tools"
+  | "oauth-clients"
   | "cloud"
+  | "js2ray"
   | "operations"
   | "systemLogs";
 
@@ -87,6 +90,13 @@ const definitions: readonly ViewDefinition[] = [
     load: () => import("../components/ComputerView.vue"),
   }),
   viewDefinition({
+    id: "mcp-servers",
+    path: "/mcp-servers",
+    titleKey: "nav.mcp",
+    icon: "$mdiServerNetwork",
+    load: () => import("../components/McpServersView.vue"),
+  }),
+  viewDefinition({
     id: "tools",
     path: "/tools",
     titleKey: "nav.mcpTools",
@@ -94,11 +104,25 @@ const definitions: readonly ViewDefinition[] = [
     load: () => import("../components/McpToolsView.vue"),
   }),
   viewDefinition({
+    id: "oauth-clients",
+    path: "/oauth-clients",
+    titleKey: "nav.oauthClients",
+    icon: "$mdiKeyOutline",
+    load: () => import("../components/OAuthClientsView.vue"),
+  }),
+  viewDefinition({
     id: "cloud",
     path: "/cloud",
     titleKey: "nav.cloud",
     icon: "$mdiCloudOutline",
     load: () => import("../components/CloudView.vue"),
+  }),
+  viewDefinition({
+    id: "js2ray",
+    path: "/js2ray",
+    titleKey: "nav.js2ray",
+    icon: "$v2ray",
+    load: () => import("../components/Js2rayView.vue"),
   }),
   viewDefinition({
     id: "operations",

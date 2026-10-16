@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "check:architecture": "node scripts/check-architecture.mjs",
     "test": "node scripts/run-tests.mjs",
-    "check": "npm run format:check && npm run typecheck && npm run check:architecture && npm test && npm run build",
+    "check": "npm run format:check && npm run typecheck && npm run check:architecture && npm test && npm run build && npm run verify:package",
+    "verify:package": "node scripts/verify-js2ray-package.mjs",
     "start": "node dist/cli/index.js serve",
     "release": "npm publish --tag latest --access public",
     "prepack": "npm run check",
@@ -29,13 +30,17 @@
     "clean:all": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@github/keytar": "^7.10.6",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@simplewebauthn/server": "13.3.2",
     "compression": "^1.8.2",
     "express": "^5.1.0",
     "pdfjs-dist": "6.4.299",
-    "ws": "^8.18.3",
+    "re2js": "2.8.6",
+    "undici": "^8.10.2",
+    "ws": "8.22.0",
     "zod": "^4.0.17"
   },
   "optionalDependencies": {
@@ -83,7 +88,20 @@
     "assets",
     "chatroom.config.example.json"
   ],
+  "allowScripts": {
+    "@github/keytar@7.10.6": true,
+    "esbuild@0.28.2": true,
+    "node-pty@1.1.0": true
+  },
   "imports": {
+    "#js2ray": {
+      "chatroom-source": {
+        "types": "./vendor/js2ray/index.d.ts",
+        "default": "./vendor/js2ray/index.mjs"
+      },
+      "types": "./dist/vendor/js2ray/index.d.ts",
+      "default": "./dist/vendor/js2ray/index.mjs"
+    },
     "#app/*": {
       "chatroom-source": "./src/app/*.ts",
       "default": "./dist/app/*.js"

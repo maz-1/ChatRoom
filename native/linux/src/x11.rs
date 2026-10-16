@@ -290,20 +290,41 @@ impl X11Controller {
             }
         }
 
-        let mut encoded = Vec::new();
-        {
-            let mut encoder = png::Encoder::new(&mut encoded, width.into(), height.into());
-            encoder.set_color(png::ColorType::Rgba);
-            encoder.set_depth(png::BitDepth::Eight);
-            let mut writer = encoder
-                .write_header()
-                .map_err(|error| NativeError::internal(error.to_string()))?;
-            writer
-                .write_image_data(&rgba)
-                .map_err(|error| NativeError::internal(error.to_string()))?;
-        }
+        let webp_width = u32::from(width);
+        let webp_height = u32::from(height);
+        let webp_encoded = match webp::WebPConfig::new() {
+            Ok(mut config) => {
+                config.lossless = 0;
+                config.alpha_compression = 1;
+                config.quality = 85.0;
+                config.method = 1;
+                config.thread_level = 0;
+                webp::Encoder::from_rgba(&rgba, webp_width, webp_height)
+                    .encode_advanced(&config)
+                    .ok()
+            }
+            Err(_) => None,
+        };
+        let (mime_type, encoded) = match webp_encoded {
+            Some(encoded) => ("image/webp", encoded.to_vec()),
+            None => {
+                let mut encoded = Vec::new();
+                {
+                    let mut encoder = png::Encoder::new(&mut encoded, webp_width, webp_height);
+                    encoder.set_color(png::ColorType::Rgba);
+                    encoder.set_depth(png::BitDepth::Eight);
+                    let mut writer = encoder
+                        .write_header()
+                        .map_err(|error| NativeError::internal(error.to_string()))?;
+                    writer
+                        .write_image_data(&rgba)
+                        .map_err(|error| NativeError::internal(error.to_string()))?;
+                }
+                ("image/png", encoded)
+            }
+        };
         Ok(ScreenshotPayload {
-            mime_type: "image/png",
+            mime_type,
             data: STANDARD.encode(encoded),
         })
     }

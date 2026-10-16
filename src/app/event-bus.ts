@@ -21,7 +21,8 @@ export type RuntimeEvent =
       turnIds?: string[];
       itemIds?: string[];
       deleted?: boolean;
-    };
+    }
+  | { type: "mcp-servers" };
 
 export class RuntimeEventBus {
   private readonly emitter = new EventEmitter();

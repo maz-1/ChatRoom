@@ -1,4 +1,4 @@
-import { Router, type ErrorRequestHandler } from "express";
+import { Router, type ErrorRequestHandler, type Request } from "express";
 import type { AuthService, AuthorizationRequest } from "#auth/auth-service";
 import type { IngressPolicy } from "#auth/ingress-policy";
 import type { LogWriter } from "#core/logging/types";
@@ -30,7 +30,20 @@ export function createOAuthRouter(
           (value): value is string => typeof value === "string",
         )
       : [];
-    res.status(201).json(auth.registerClient(name, redirects));
+    const client = auth.registerClient(name, redirects);
+    const registrationDetails = {
+      ...registrationRequestDetails(req, ingress),
+      clientName: name,
+      redirectUris: redirects,
+      clientId: client.client_id,
+    };
+    logs.info(
+      "auth",
+      "oauth.registration_accepted",
+      "OAuth client registration accepted",
+      registrationDetails,
+    );
+    res.status(201).json(client);
   });
 
   router.get("/oauth/authorize", (req, res) => {
@@ -90,11 +103,14 @@ export function createOAuthRouter(
     if (token) auth.revoke(token);
     res.status(200).end();
   });
-  router.use(oauthErrorMiddleware(logs));
+  router.use(oauthErrorMiddleware(logs, ingress));
   return router;
 }
 
-function oauthErrorMiddleware(logs: LogWriter): ErrorRequestHandler {
+function oauthErrorMiddleware(
+  logs: LogWriter,
+  ingress: IngressPolicy,
+): ErrorRequestHandler {
   return (error, req, res, _next) => {
     const normalized = asChatRoomError(error);
     let code = "invalid_request";
@@ -106,14 +122,65 @@ function oauthErrorMiddleware(logs: LogWriter): ErrorRequestHandler {
     )
       code = "invalid_redirect_uri";
     else if (normalized.code === "FORBIDDEN") code = "access_denied";
-    logs.warn("auth", "oauth.failed", "OAuth request failed", {
+
+    const registrationBody =
+      req.path === "/oauth/register" && req.body && typeof req.body === "object"
+        ? (req.body as Record<string, unknown>)
+        : null;
+    const logDetails = {
       path: req.path,
       reason: code,
-    });
+      ...(registrationBody
+        ? {
+            ...registrationRequestDetails(req, ingress),
+            clientName:
+              typeof registrationBody.client_name === "string"
+                ? registrationBody.client_name
+                : "MCP Client",
+            redirectUris: Array.isArray(registrationBody.redirect_uris)
+              ? registrationBody.redirect_uris.filter(
+                  (value): value is string => typeof value === "string",
+                )
+              : [],
+            error: normalized.code,
+            errorDescription: normalized.message,
+          }
+        : {}),
+    };
+    logs.warn(
+      "auth",
+      registrationBody ? "oauth.registration_rejected" : "oauth.failed",
+      registrationBody
+        ? "OAuth client registration rejected"
+        : "OAuth request failed",
+      logDetails,
+    );
+
     res.setHeader("Cache-Control", "no-store");
     res
       .status(400)
       .json({ error: code, error_description: normalized.message });
+  };
+}
+
+function registrationRequestDetails(
+  req: Request,
+  ingress: IngressPolicy,
+): {
+  timestamp: string;
+  sourceAddress: string | null;
+  sourcePort: number | null;
+  host: string | null;
+  userAgent: string | null;
+  externalMcp: boolean;
+} {
+  return {
+    timestamp: new Date().toISOString(),
+    sourceAddress: req.socket.remoteAddress ?? null,
+    sourcePort: req.socket.remotePort ?? null,
+    host: req.get("host") ?? null,
+    userAgent: req.get("user-agent") ?? null,
+    externalMcp: ingress.isExternalMcp(req),
   };
 }
 
@@ -199,6 +266,42 @@ function authorizationPage(request: AuthorizationRequest): string {
     <input id="owner_token" name="owner_token" type="password" autocomplete="current-password" required>
     <button type="submit">Authorize</button>
   </form>
+  <script>
+    const ownerToken = document.getElementById("owner_token");
+    ownerToken.addEventListener("paste", (event) => {
+      const pasted = event.clipboardData?.getData("text");
+      if (pasted === undefined) return;
+      event.preventDefault();
+      ownerToken.value = pasted;
+      void clearClipboard();
+    });
+
+    async function clearClipboard() {
+      try {
+        await navigator.clipboard.writeText("");
+        return;
+      } catch {
+        // Clipboard API can be unavailable or denied; fall back to a user-gesture copy.
+      }
+
+      try {
+        const fallback = document.createElement("textarea");
+        fallback.value = "";
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.appendChild(fallback);
+        fallback.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          fallback.remove();
+        }
+      } catch {
+        // Clipboard clearing is best-effort; authorization must still remain usable.
+      }
+    }
+  </script>
 </body>
 </html>`;
 }

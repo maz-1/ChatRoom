@@ -24,6 +24,9 @@ import { createRuntimeApiRouter } from "./runtime-api-router.js";
 import { createLogsApiRouter } from "./logs-api-router.js";
 import { createAgentApiRouter } from "./agent-api-router.js";
 import type { LogService } from "#core/logging/types";
+import { defaultConfigPath } from "#config/load-config";
+import { createMcpApiRouter } from "./mcp-api-router.js";
+import { createOAuthClientsApiRouter } from "./oauth-clients-api-router.js";
 
 export function createApiRouter(
   application: WebRuntime,
@@ -43,6 +46,7 @@ export function createApiRouter(
   router.use(createPublicAuthApiRouter(auth, passkeys, ingress, logs));
   router.use(apiAuthentication(auth, ingress));
   router.use(createPrivateAuthApiRouter(passkeys, ingress, logs));
+  router.use(createOAuthClientsApiRouter(auth));
   router.use(createRuntimeApiRouter(application, eventBus, runtimeStatus));
   router.use(createLogsApiRouter(logs));
 
@@ -89,5 +93,12 @@ export function createApiRouter(
     ),
   );
   router.use(createCloudApiRouter(cloud, application.operations));
+  router.use(
+    createMcpApiRouter(
+      application.mcpProxy,
+      application.operations,
+      defaultConfigPath,
+    ),
+  );
   return router;
 }
