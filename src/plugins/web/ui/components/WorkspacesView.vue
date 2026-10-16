@@ -16,7 +16,7 @@ const allowedRoots = shallowRef<string[]>([]);
 const selectedRoot = shallowRef<string | null>(
   window.localStorage.getItem("chatroom.workspace.root"),
 );
-const tab = shallowRef("git");
+const tab = shallowRef("files");
 const loading = shallowRef(false);
 const error = shallowRef("");
 const createOpen = shallowRef(false);
