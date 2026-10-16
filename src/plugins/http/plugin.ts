@@ -14,7 +14,7 @@ export function createHttpPlugin(
   return {
     id: "http",
     activate(context) {
-      fetcher = new HttpFetcher(context.config.http, namedProxy);
+      fetcher = new HttpFetcher(context.config.http, namedProxy, context.logs);
       context.services.provide(HttpFetcherToken, fetcher);
     },
     registerMcp(mcp) {

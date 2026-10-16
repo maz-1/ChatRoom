@@ -4,6 +4,8 @@ import {
   type ProxyDispatcherFactory,
 } from "#core/runtime/proxy-dispatcher";
 import type { HttpRequestInput, HttpResponse } from "./types.js";
+import type { LogWriter } from "#core/logging/types";
+import { logRequestFailure, translateRequestError } from "./request-error.js";
 import {
   fetch,
   type Dispatcher,
@@ -21,6 +23,7 @@ export class HttpFetcher {
   constructor(
     private readonly limits: HttpFetcherLimits,
     private readonly namedProxy?: ProxyDispatcherFactory,
+    private readonly logs?: LogWriter,
   ) {}
 
   async request(input: HttpRequestInput): Promise<HttpResponse> {
@@ -39,11 +42,14 @@ export class HttpFetcher {
     );
     const body = encodeRequestBody(input);
     const headers = normalizeHeaders(input.headers);
-    const dispatcher =
-      input.proxy === undefined
-        ? undefined
-        : createProxyDispatcher(input.proxy, timeoutMs, this.namedProxy);
+    let dispatcher: Dispatcher | undefined;
     try {
+      if (input.proxy !== undefined)
+        dispatcher = createProxyDispatcher(
+          input.proxy,
+          timeoutMs,
+          this.namedProxy,
+        );
       const options: RequestInit & { dispatcher?: Dispatcher } = {
         method: input.method,
         ...(headers === undefined ? {} : { headers }),
@@ -61,6 +67,7 @@ export class HttpFetcher {
         this.limits.maxResponseBytes,
       );
     } catch (error) {
+      logRequestFailure(this.logs, error, timeoutMs, input.proxy);
       throw translateRequestError(error, timeoutMs);
     } finally {
       await dispatcher?.destroy();
@@ -202,29 +209,4 @@ function isTextualContentType(contentType: string | null): boolean {
     mime.endsWith("+json") ||
     mime.endsWith("+xml")
   );
-}
-
-function translateRequestError(
-  error: unknown,
-  timeoutMs: number,
-): ChatRoomError {
-  if (error instanceof ChatRoomError) return error;
-  if (error instanceof DOMException && error.name === "TimeoutError")
-    return new ChatRoomError(
-      "PROCESS_FAILED",
-      `HTTP request timed out after ${timeoutMs}ms`,
-    );
-  if (error instanceof Error) {
-    const cause = error.cause as { code?: string } | undefined;
-    const detail = cause?.code
-      ? `${error.message} (${cause.code})`
-      : error.message;
-    return new ChatRoomError(
-      "PROCESS_FAILED",
-      `HTTP request failed: ${detail}`,
-      undefined,
-      { cause: error },
-    );
-  }
-  return new ChatRoomError("PROCESS_FAILED", "HTTP request failed");
 }

@@ -3,6 +3,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { ChatRoomError } from "../../src/core/errors/chatroom-error.js";
+import type { LogWriter } from "../../src/core/logging/types.js";
 import {
   HttpFetcher,
   type HttpFetcherLimits,
@@ -40,13 +41,18 @@ function readBody(request: http.IncomingMessage): Promise<Buffer> {
 
 function createFetcher(
   overrides: Partial<HttpFetcherLimits> = {},
+  logs?: LogWriter,
 ): HttpFetcher {
-  return new HttpFetcher({
-    defaultTimeoutMs: 2_000,
-    maxTimeoutMs: 10_000,
-    maxResponseBytes: 16 * 1024,
-    ...overrides,
-  });
+  return new HttpFetcher(
+    {
+      defaultTimeoutMs: 2_000,
+      maxTimeoutMs: 10_000,
+      maxResponseBytes: 16 * 1024,
+      ...overrides,
+    },
+    undefined,
+    logs,
+  );
 }
 
 async function assertChatRoomError(
@@ -287,6 +293,15 @@ test("http fetcher reports timeouts as PROCESS_FAILED", async () => {
 });
 
 test("http fetcher reports connection failures as PROCESS_FAILED", async () => {
+  const warnings: unknown[] = [];
+  const logs: LogWriter = {
+    debug() {},
+    info() {},
+    error() {},
+    warn(...args) {
+      warnings.push(args);
+    },
+  };
   const reserved = await startServer((_request, response) => {
     response.end("unused");
   });
@@ -294,7 +309,7 @@ test("http fetcher reports connection failures as PROCESS_FAILED", async () => {
   await reserved.close();
 
   await assertChatRoomError(
-    createFetcher().request({
+    createFetcher({}, logs).request({
       url: `http://127.0.0.1:${port}/nowhere`,
       method: "GET",
       headers: undefined,
@@ -306,6 +321,9 @@ test("http fetcher reports connection failures as PROCESS_FAILED", async () => {
     "PROCESS_FAILED",
     /HTTP request failed/,
   );
+  assert.equal(warnings.length, 1);
+  assert.match(JSON.stringify(warnings), /http.request_failed/);
+  assert.match(JSON.stringify(warnings), /ECONNREFUSED/);
 });
 
 test("http fetcher rejects unsupported URL schemes and malformed URLs", async () => {

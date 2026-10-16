@@ -36,6 +36,26 @@ const limits = {
 };
 const quiet: LogWriter = { debug() {}, info() {}, warn() {}, error() {} };
 
+function captureLogs() {
+  const records: Array<{
+    level: string;
+    event: string;
+    message: string;
+    data: Record<string, unknown> | undefined;
+  }> = [];
+  const writer =
+    (level: string): LogWriter["warn"] =>
+    (_module, event, message, data) =>
+      records.push({ level, event, message, data });
+  const logs: LogWriter = {
+    debug: writer("debug"),
+    info: writer("info"),
+    warn: writer("warn"),
+    error: writer("error"),
+  };
+  return { records, logs };
+}
+
 async function listen(server: net.Server) {
   const sockets = new Set<net.Socket>();
   server.on("connection", (socket) => {
@@ -130,7 +150,16 @@ test("js2ray uses VLESS/WSS with Undici 8 for HTTP, target HTTPS and redirects w
       ],
     }),
   );
-  const controller = new Js2rayController(settings, quiet);
+  const records: Array<{ code?: unknown }> = [];
+  const capture: LogWriter["debug"] = (_module, _event, _message, data) => {
+    if (data) records.push(data);
+  };
+  const controller = new Js2rayController(settings, {
+    debug: capture,
+    info: capture,
+    warn: capture,
+    error: capture,
+  });
   await controller.start();
   t.after(() => controller.stop());
   const fetcher = new HttpFetcher(limits, (timeout) =>
@@ -159,6 +188,7 @@ test("js2ray uses VLESS/WSS with Undici 8 for HTTP, target HTTPS and redirects w
   }
   assert.equal(controller.status().listeners, 0);
   await controller.stop();
+  assert.ok(!records.some((record) => record.code === "ERR_CANCELLED"));
   await assert.rejects(
     fetcher.request(
       httpRequestSchema.parse({
@@ -190,11 +220,14 @@ test("js2ray cancellation destroys pending tunnel connections and never falls ba
       ],
     }),
   );
-  const controller = new Js2rayController(settings, quiet);
+  const { records, logs } = captureLogs();
+  const controller = new Js2rayController(settings, logs);
   await controller.start();
   t.after(() => controller.stop());
-  const fetcher = new HttpFetcher(limits, (timeout) =>
-    controller.createDispatcher(timeout),
+  const fetcher = new HttpFetcher(
+    limits,
+    (timeout) => controller.createDispatcher(timeout),
+    logs,
   );
   await assert.rejects(
     fetcher.request(
@@ -206,9 +239,102 @@ test("js2ray cancellation destroys pending tunnel connections and never falls ba
     ),
     /timed out after 150ms/,
   );
+  const failures = records.filter(
+    (record) => record.event === "http.request_failed",
+  );
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]!.level, "warn");
+  assert.equal(failures[0]!.data?.code, "ERR_TIMEOUT");
+  assert.equal(failures[0]!.data?.proxy, "js2ray");
   await controller.stop();
   const disabled = new Js2rayController(defaultJs2rayConfig(), quiet);
   assert.throws(() => disabled.createDispatcher(100), /not running/);
+});
+
+test("js2ray logs body timeouts and network failures while successful cleanup remains silent", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "chatroom-js2ray-body-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const target = await listen(
+    http.createServer((request, response) => {
+      if (request.url?.startsWith("/slow")) {
+        response.writeHead(200, { "content-type": "text/plain" });
+        response.write("partial");
+      } else response.end("ok");
+    }),
+  );
+  t.after(target.close);
+  const settings = defaultJs2rayConfig();
+  settings.enabled = true;
+  settings.configPath = path.join(root, "runtime.json");
+  await writeFile(
+    settings.configPath,
+    JSON.stringify({ outbounds: [{ protocol: "freedom" }] }),
+  );
+  const { records, logs } = captureLogs();
+  const controller = new Js2rayController(settings, logs);
+  await controller.start();
+  t.after(() => controller.stop());
+  const fetcher = new HttpFetcher(
+    limits,
+    (timeout) => controller.createDispatcher(timeout),
+    logs,
+  );
+  await Promise.all([
+    assert.rejects(
+      fetcher.request(
+        httpRequestSchema.parse({
+          url: `http://127.0.0.1:${target.port}/slow?token=private-query`,
+          headers: { authorization: "Bearer private-header" },
+          proxy: "v2ray",
+          timeoutMs: 200,
+        }),
+      ),
+      /timed out after 200ms/,
+    ),
+    (async () => {
+      const result = await fetcher.request(
+        httpRequestSchema.parse({
+          url: `http://127.0.0.1:${target.port}/ok`,
+          proxy: "js2ray",
+        }),
+      );
+      assert.equal(result.body, "ok");
+    })(),
+  ]);
+  const failures = records.filter(
+    (record) => record.event === "http.request_failed",
+  );
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]!.data?.code, "ERR_TIMEOUT");
+  assert.equal(failures[0]!.data?.proxy, "js2ray");
+  assert.ok(!records.some((record) => record.data?.code === "ERR_CANCELLED"));
+  assert.doesNotMatch(
+    JSON.stringify(records),
+    /private-query|private-header|\/slow/,
+  );
+  const reserved = await listen(net.createServer());
+  await reserved.close();
+  await assert.rejects(
+    fetcher.request(
+      httpRequestSchema.parse({
+        url: `http://127.0.0.1:${reserved.port}/`,
+        proxy: "js2ray",
+      }),
+    ),
+    /HTTP request failed/,
+  );
+  assert.ok(
+    records.some(
+      (record) =>
+        record.level === "warn" &&
+        record.event === "js2ray.diagnostic" &&
+        record.data?.code === "ERR_TRANSPORT",
+    ),
+  );
+  assert.equal(
+    records.filter((record) => record.event === "http.request_failed").length,
+    2,
+  );
 });
 
 test("js2ray rejects local listeners and sanitizes startup failures", async (t) => {

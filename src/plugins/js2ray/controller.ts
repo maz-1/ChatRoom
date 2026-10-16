@@ -1,13 +1,15 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Duplex } from "node:stream";
-import * as undici from "undici";
-import { createRuntime, createUndiciDispatcher, type Runtime } from "#js2ray";
+import type { Dispatcher } from "undici";
+import { createRuntime, type Js2rayError, type Runtime } from "#js2ray";
 import type { Js2rayConfig } from "#config/js2ray-config";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import type { LogWriter } from "#core/logging/types";
 import { prepareRuntimeConfig } from "./runtime-config.js";
 import type { Js2rayStatus } from "./types.js";
+import { logJs2rayDiagnostic, safeIdentifier } from "./diagnostics.js";
+import { createHttpDispatcher } from "./http-dispatcher.js";
 
 export class Js2rayController {
   private runtime: Runtime | null = null;
@@ -73,30 +75,8 @@ export class Js2rayController {
       );
       this.runtime = createRuntime(config, {
         baseDir: path.dirname(this.settings.configPath),
-        logger: (record) => {
-          const data = {
-            code: safeIdentifier(record.code, "ERR_INTERNAL"),
-            phase: safeIdentifier(record.phase, "runtime"),
-          };
-          if (
-            record.code === "ERR_CANCELLED" ||
-            this.stopping ||
-            this.runtime?.state === "closing"
-          )
-            this.logs.debug(
-              "js2ray",
-              "js2ray.connection_closed",
-              "js2ray connection closed",
-              data,
-            );
-          else
-            this.logs.warn(
-              "js2ray",
-              "js2ray.diagnostic",
-              "js2ray reported a connection error",
-              data,
-            );
-        },
+        // Serialized logger records omit the cause; use diagnostics below.
+        logger: () => {},
         services: {
           chatroom: () => {
             if (!this.reverseHandler)
@@ -105,6 +85,16 @@ export class Js2rayController {
           },
         },
       });
+      const runtime = this.runtime;
+      runtime.on("diagnostic", (error: Js2rayError) =>
+        logJs2rayDiagnostic(
+          this.logs,
+          error,
+          !!this.stopping ||
+            runtime.state === "closing" ||
+            runtime.state === "closed",
+        ),
+      );
       this.runtime.on("reverse", (event: { state: string }) =>
         this.logs.info(
           "js2ray",
@@ -143,7 +133,7 @@ export class Js2rayController {
     }
   }
 
-  createDispatcher(timeoutMs: number): undici.Dispatcher {
+  createDispatcher(timeoutMs: number): Dispatcher {
     if (
       !this.settings.enabled ||
       this.runtime?.state !== "running" ||
@@ -153,13 +143,11 @@ export class Js2rayController {
         "PROCESS_FAILED",
         "The js2ray runtime is not running",
       );
-    return createUndiciDispatcher(this.runtime, {
-      undici,
+    return createHttpDispatcher(
+      this.runtime,
       timeoutMs,
-      ...(this.settings.outboundTag
-        ? { outboundTag: this.settings.outboundTag }
-        : {}),
-    });
+      this.settings.outboundTag,
+    );
   }
 
   async stop(): Promise<void> {
@@ -179,10 +167,4 @@ export class Js2rayController {
     this.runtime = null;
     await runtime?.close({ drainTimeoutMs: 1000 });
   }
-}
-
-function safeIdentifier(value: unknown, fallback: string): string {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value)
-    ? value
-    : fallback;
 }
