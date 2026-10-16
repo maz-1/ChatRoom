@@ -46,8 +46,10 @@ import {
   mdiWeatherSunny,
   mdiWrap,
 } from "@mdi/js";
+import V2rayIcon from "./components/V2rayIcon.vue";
 
 export const chatroomIconAliases = {
+  v2ray: V2rayIcon,
   mdiAlertCircleOutline,
   mdiArrowLeft,
   mdiArrowUp,

@@ -92,21 +92,21 @@ const definitions: readonly ViewDefinition[] = [
     ),
   },
   {
+    id: "js2ray",
+    path: "/js2ray",
+    titleKey: "nav.js2ray",
+    icon: "$v2ray",
+    component: defineAsyncComponent(
+      () => import("../components/Js2rayView.vue"),
+    ),
+  },
+  {
     id: "operations",
     path: "/operations",
     titleKey: "nav.operations",
     icon: "$mdiTextBoxOutline",
     component: defineAsyncComponent(
       () => import("../components/OperationsView.vue"),
-    ),
-  },
-  {
-    id: "js2ray",
-    path: "/js2ray",
-    titleKey: "nav.js2ray",
-    icon: "$mdiServerNetwork",
-    component: defineAsyncComponent(
-      () => import("../components/Js2rayView.vue"),
     ),
   },
   {
