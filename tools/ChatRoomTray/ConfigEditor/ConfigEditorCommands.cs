@@ -468,6 +468,8 @@ internal static class ConfigEditorCommands
             if (!ok) failed++;
         }
 
+        global::ChatRoomTray.CodexEnvironmentSmoke.Run(Check);
+
 #if WINDOWS_TRAY
         var dpiMode = System.Windows.Forms.Application.HighDpiMode;
         Check(

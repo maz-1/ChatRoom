@@ -615,6 +615,12 @@ internal sealed class CrossPlatformTrayHost : IDisposable
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
 
+        var environment = CodexEnvironment.Create(executable);
+        start.FileName = CodexEnvironment.ResolveRuntimeExecutable(executable, environment);
+        start.Environment.Clear();
+        foreach (var entry in environment)
+            start.Environment[entry.Key] = entry.Value;
+
         return Process.Start(start)
                ?? throw new InvalidOperationException("无法创建 ChatRoom Node.js 进程。");
     }

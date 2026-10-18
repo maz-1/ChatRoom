@@ -176,19 +176,29 @@ internal sealed class TrayApplicationContext : ApplicationContext
         commandLine.Append('"').Append(executable).Append('"');
         if (!string.IsNullOrWhiteSpace(arguments)) commandLine.Append(' ').Append(arguments);
 
-        if (!NativeMethods.CreateProcess(
+        var environment = Marshal.StringToHGlobalUni(
+            CodexEnvironment.WindowsEnvironmentBlock(CodexEnvironment.Create(executable)));
+        NativeMethods.ProcessInformation processInfo;
+        try
+        {
+            if (!NativeMethods.CreateProcess(
                 executable,
                 commandLine,
                 IntPtr.Zero,
                 IntPtr.Zero,
                 false,
-                NativeMethods.CreateNewConsole,
-                IntPtr.Zero,
+                NativeMethods.CreateNewConsole | NativeMethods.CreateUnicodeEnvironment,
+                environment,
                 workingDirectory,
                 ref startupInfo,
-                out var processInfo))
+                out processInfo))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "无法启动 ChatRoom 控制台进程。");
+            }
+        }
+        finally
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "无法启动 ChatRoom 控制台进程。");
+            Marshal.FreeHGlobal(environment);
         }
 
         try
@@ -476,6 +486,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         internal const int SwRestore = 9;
         internal const int StartfUseShowWindow = 0x00000001;
         internal const uint CreateNewConsole = 0x00000010;
+        internal const uint CreateUnicodeEnvironment = 0x00000400;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         internal struct StartupInfo
