@@ -78,7 +78,7 @@ jobs:
           APP=dist/native/macos/ChatRoomComputerHelper.app
           BINARY="$APP/Contents/MacOS/chatroom-computer-helper"
           file "$BINARY"
-          xcrun lipo -verify_arch arm64 x86_64 "$BINARY"
+          xcrun lipo "$BINARY" -verify_arch arm64 x86_64
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=4 "$BINARY" 2>&1
           plutil -lint "$APP/Contents/Info.plist"
