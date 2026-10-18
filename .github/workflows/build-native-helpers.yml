@@ -1,0 +1,106 @@
+name: Build native Computer helpers
+
+on:
+  push:
+    branches:
+      - "codex/build-native-helpers-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Linux x64 helper
+        run: npm run build:native:linux
+      - name: Verify Linux binary and protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          BINARY=dist/native/linux/chatroom-computer-helper
+          file "$BINARY"
+          readelf -h "$BINARY" | grep 'Advanced Micro Devices X86-64'
+          ldd "$BINARY"
+          if ! command -v xvfb-run >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y xvfb
+          fi
+          xvfb-run -a python3 - <<'PY'
+          import json, subprocess
+          request = json.dumps({"protocol": 1, "id": "build-smoke", "method": "status"}) + "\n"
+          result = subprocess.run(["dist/native/linux/chatroom-computer-helper"], input=request, text=True, capture_output=True, timeout=30, check=True)
+          response = json.loads(result.stdout)
+          assert response["protocol"] == 1 and response["id"] == "build-smoke", response
+          assert response["result"]["platform"] == "linux", response
+          assert response["result"]["helper"] == "running", response
+          print(json.dumps(response, indent=2))
+          PY
+      - name: Package Linux helper
+        run: |
+          tar -C dist/native/linux -czf dist/native/chatroom-computer-helper-linux-x64.tar.gz chatroom-computer-helper
+          sha256sum dist/native/chatroom-computer-helper-linux-x64.tar.gz > dist/native/chatroom-computer-helper-linux-x64.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chatroom-computer-helper-linux-x64
+          path: |
+            dist/native/chatroom-computer-helper-linux-x64.tar.gz
+            dist/native/chatroom-computer-helper-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-universal:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          package-manager-cache: false
+      - name: Build macOS universal helper
+        env:
+          CHATROOM_MACOS_SIGN_IDENTITY: "-"
+          CHATROOM_MACOS_ARCHS: "arm64,x86_64"
+        run: npm run build:native:macos
+      - name: Verify macOS binary, signature, and protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=dist/native/macos/ChatRoomComputerHelper.app
+          BINARY="$APP/Contents/MacOS/chatroom-computer-helper"
+          file "$BINARY"
+          xcrun lipo -verify_arch arm64 x86_64 "$BINARY"
+          codesign --verify --deep --strict "$APP"
+          codesign -dv --verbose=4 "$BINARY" 2>&1
+          plutil -lint "$APP/Contents/Info.plist"
+          python3 - <<'PY'
+          import json, subprocess
+          request = json.dumps({"protocol": 1, "id": "build-smoke", "method": "status"}) + "\n"
+          result = subprocess.run(["dist/native/macos/ChatRoomComputerHelper.app/Contents/MacOS/chatroom-computer-helper"], input=request, text=True, capture_output=True, timeout=30, check=True)
+          response = json.loads(result.stdout)
+          assert response["protocol"] == 1 and response["id"] == "build-smoke", response
+          assert response["result"]["platform"] == "macos", response
+          assert response["result"]["helper"] == "running", response
+          print(json.dumps(response, indent=2))
+          PY
+      - name: Package macOS helper
+        run: |
+          tar -C dist/native/macos -czf dist/native/chatroom-computer-helper-macos-universal.tar.gz ChatRoomComputerHelper.app
+          shasum -a 256 dist/native/chatroom-computer-helper-macos-universal.tar.gz > dist/native/chatroom-computer-helper-macos-universal.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chatroom-computer-helper-macos-universal
+          path: |
+            dist/native/chatroom-computer-helper-macos-universal.tar.gz
+            dist/native/chatroom-computer-helper-macos-universal.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
