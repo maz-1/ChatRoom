@@ -552,10 +552,11 @@ internal sealed class CrossPlatformTrayHost : IDisposable
 
     private void ExitRequested()
     {
-        if (_configForm is not null && !_configForm.IsDisposed)
+        var configForm = _configForm;
+        if (configForm is not null && !configForm.IsDisposed)
         {
-            _configForm.Close();
-            if (!_configForm.IsDisposed) return;
+            configForm.Close();
+            if (_configForm is not null) return;
         }
 
         _exiting = true;

@@ -51,6 +51,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         // Eto uses the WinForms backend inside the existing tray message loop.
         _etoApplication = new Eto.Forms.Application(new Eto.WinForms.Platform());
+        _etoApplication.Attach();
         _settings = new TraySettings(Path.Combine(_appDir, "chatroom-tray.ini"));
         _appIcon = LoadApplicationIcon();
         _trayIcon = new NotifyIcon
@@ -109,7 +110,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _stopItem.Click += (_, _) => StopChatRoom();
         _restartItem.Click += (_, _) => RestartChatRoom();
         _argsItem.Click += (_, _) => EditStartupArgs();
-        _editConfigItem.Click += (_, _) => OpenConfigEditor();
+        // Show the editor after the tray menu has closed and restored focus.
+        _editConfigItem.Click += (_, _) => _etoApplication.AsyncInvoke(OpenConfigEditor);
         _exitItem.Click += (_, _) => ExitRequested();
         _trayIcon.DoubleClick += (_, _) => ToggleConsole();
         _watchTimer.Tick += (_, _) => WatchProcess();
@@ -363,6 +365,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenConfigEditor()
     {
+        if (_exiting || _disposed) return;
+
         if (_configForm is not null && !_configForm.IsDisposed)
         {
             if (_configForm.WindowState == Eto.Forms.WindowState.Minimized)
@@ -380,6 +384,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _configForm.Closed += (_, _) => _configForm = null;
         _configForm.Show();
         _configForm.BringToFront();
+        _configForm.Focus();
     }
 
     private void WatchProcess()
@@ -423,10 +428,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ExitRequested()
     {
-        if (_configForm is not null && !_configForm.IsDisposed)
+        var configForm = _configForm;
+        if (configForm is not null && !configForm.IsDisposed)
         {
-            _configForm.Close();
-            if (!_configForm.IsDisposed) return;
+            // Closed clears the reference; a canceled Closing keeps it. Eto's
+            // IsDisposed can still be false after the native window has closed.
+            configForm.Close();
+            if (_configForm is not null) return;
         }
 
         _exiting = true;
