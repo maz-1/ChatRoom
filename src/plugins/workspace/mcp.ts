@@ -54,7 +54,7 @@ export function registerWorkspaceTools(
     {
       title: "Workspace info",
       description:
-        "Read the complete workspace context for a project, including its summary, preset prompt, project instructions, and skill metadata. Workspaces on the blacklist cannot be read.",
+        "Read the complete workspace context for a project, including its summary, preset prompt, project instructions, and enabled skill metadata. Skills disabled in the workspace's .codex/config.toml are omitted. For MCP bridge operations in this project, pass this root to mcp_list_servers, mcp_call and mcp_refresh to apply its .codex/config.toml settings. Workspaces on the blacklist cannot be read.",
       inputSchema: z.object({ root: z.string() }),
       outputSchema: workspaceInfoSchema,
       annotations: closedRead,

@@ -38,6 +38,26 @@ ChatGPT 通过 MCP Endpoint 连接 ChatRoom。需要远程访问时，可以直�
 
 当前 ChatGPT 接入流程见：[在 ChatGPT 中使用 ChatRoom](https://doc.chatroomcp.com/zh/chatgpt)。
 
+## 工作区 MCP 设置
+
+在 WebUI 的 **工作区 → 设置** 中，可以单独启用或禁用当前项目内的桥接 MCP 服务。点击 **配置工具** 可编辑允许/禁用的工具和服务调用超时，修改后保存。设置存储在工作区的 `.codex/config.toml`：
+
+```toml
+[mcp_servers.example]
+enabled = false
+enabled_tools = ["search", "read"]
+disabled_tools = ["delete"]
+tool_timeout_sec = 120
+```
+
+服务名对应 ChatRoom 全局配置中的 `mcp.servers`。未配置时默认启用，全局禁用优先。省略 `enabled_tools` 表示允许全部工具，空数组表示不允许任何工具；`disabled_tools` 在允许列表之后生效。筛选同时约束工具查询与调用。超时优先级为：单次调用的 `timeoutMs` → 工作区的 `tool_timeout_sec` → 全局的 `mcp.callTimeoutMs`；清空工作区超时可恢复继承。某次调用超时不会断开其他工作区共用的服务连接。
+
+在 **工作区 → 技能** 中，可启用或禁用已发现的技能。覆盖项使用 `[[skills.config]]`（或等价的内联数组），包含 `path` 和 `enabled`。WebUI 保存相对于 `.codex/` 目录的 `SKILL.md` 路径，例如 `../.agents/skills/example/SKILL.md`；同时兼容绝对路径和技能目录路径。禁用的技能仍保留在 WebUI 中供重新启用，但不会出现在 `workspace_info` 中。已有 Codex 会话需重新启动以加载技能配置。
+
+编辑时保留原有注释及其他配置，手动修改后在下一次 ChatRoom 请求中生效。工作区配置不导入 MCP 服务定义或其他 Codex 设置。
+
+执行工作区内的 MCP 桥接操作时，向 `mcp_list_servers`、`mcp_call` 和 `mcp_refresh` 传入该工作区的 `root`。禁用的服务不返回工具，并拒绝该工作区内的调用。不传 `root` 时沿用全局设置；其他工作区不受影响。
+
 ## ChatRoom Cloud
 
 ChatRoom Cloud 已内置于 ChatRoom，用于提供可选的 Remote MCP 和 Remote WebUI 公网访问。在 WebUI 的 **Cloud** 页面即可购买、恢复和管理服务。

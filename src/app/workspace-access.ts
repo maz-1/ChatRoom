@@ -12,6 +12,16 @@ export interface WorkspaceSkill {
   path: string;
 }
 
+export interface WorkspaceSkillSetting extends WorkspaceSkill {
+  enabled: boolean;
+}
+
+export interface WorkspaceSkillSettings {
+  root: string;
+  configPath: string;
+  skills: WorkspaceSkillSetting[];
+}
+
 export interface WorkspaceInfo extends WorkspaceEntry {
   presetPrompt: string | null;
   instructions: string | null;

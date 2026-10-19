@@ -1,5 +1,6 @@
 import { GitAccessToken } from "#app/git-access";
 import { WorkspaceAccessToken } from "#app/workspace-access";
+import { WorkspaceConfigAccessToken } from "#app/workspace-config-access";
 import type { InternalPlugin } from "#plugins/types";
 import { createServiceToken } from "#app/service-registry";
 import { registerWorkspaceTools } from "./mcp.js";
@@ -23,6 +24,7 @@ export function createWorkspacePlugin(): InternalPlugin {
       );
       context.services.provide(WorkspaceServiceToken, service);
       context.services.provide(WorkspaceAccessToken, service);
+      context.services.provide(WorkspaceConfigAccessToken, service.config);
     },
     registerMcp(mcp) {
       if (!service) throw new Error("Workspace plugin is not active");

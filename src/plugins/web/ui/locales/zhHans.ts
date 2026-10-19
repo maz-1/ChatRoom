@@ -588,6 +588,31 @@ export const zhChatRoom: typeof enChatRoom = {
     files: "文件",
     git: "Git",
     skills: "技能",
+    settings: "设置",
+    mcpTitle: "工作区 MCP 服务",
+    mcpHelp:
+      "设置保存在 .codex/config.toml。服务开关即时保存；工具筛选和超时修改后需点击保存。全局禁用优先。",
+    refreshSettings: "刷新工作区设置",
+    mcpWorkspaceEnabled: "在本工作区启用",
+    mcpAvailable: "已启用",
+    mcpWorkspaceDisabled: "工作区已禁用",
+    mcpGloballyDisabled: "全局已禁用",
+    mcpConfigure: "配置工具",
+    settingsSaved: "工作区设置已保存。",
+    mcpTimeout: "工具调用超时（秒）",
+    mcpTimeoutHelp:
+      "留空则继承全局超时（{0} 秒）。单次调用显式指定的超时优先。",
+    mcpTimeoutInvalid:
+      "超时须在 0.001 到 2147483.647 秒之间，或留空继承默认值。",
+    mcpLoadTools: "加载工具名称",
+    mcpToolsHelp:
+      "可选择已发现的工具，也可手动输入名称。禁用列表优先于允许列表。",
+    mcpToolMode: "工具访问范围",
+    mcpAllTools: "全部工具",
+    mcpSelectedTools: "仅所选工具",
+    mcpAllowedTools: "允许的工具",
+    mcpBlockedTools: "禁用的工具",
+    mcpEmptyAllowlist: "不选择任何工具时，该服务的所有工具均在本工作区禁用。",
     empty: "没有可显示的工作区。可新建工作区，或从黑名单中恢复。",
     block: "屏蔽当前工作区",
     blacklist: "黑名单",
@@ -678,6 +703,9 @@ export const zhChatRoom: typeof enChatRoom = {
     backToWorkspace: "返回工作区",
   },
   skills: {
+    settingsHelp:
+      "更改保存到 .codex/config.toml。禁用的技能不再出现在 ChatRoom 工作区上下文中；已有 Codex 会话需重新启动以加载技能配置。",
+    toggle: "启用或禁用技能 {0}",
     empty: "未发现 Skill。",
     noDescription: "SKILL.md 元数据中未提供描述。",
     sources: {

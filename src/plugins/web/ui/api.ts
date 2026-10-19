@@ -45,6 +45,10 @@ export type {
   WorkspaceProjectFiles,
   WorkspaceInfo,
   WorkspaceSkill,
+  WorkspaceSkillSettings,
+  WorkspaceSkillSetting,
+  WorkspaceMcpSettings,
+  WorkspaceMcpPolicyUpdate,
 } from "../api-types.js";
 
 export class ApiError extends Error {

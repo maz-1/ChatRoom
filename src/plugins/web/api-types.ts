@@ -30,6 +30,7 @@ import type {
 import type {
   McpServerDetail,
   McpToolSummary as McpProxyToolSummary,
+  WorkspaceMcpSettings,
 } from "#plugins/mcp-proxy/types";
 import type {
   ComputerDisplay,
@@ -40,8 +41,11 @@ import type {
   WorkspaceEntry,
   WorkspaceInfo,
   WorkspaceSkill,
+  WorkspaceSkillSettings,
+  WorkspaceSkillSetting,
 } from "#app/workspace-access";
 import type { WorkspaceFile } from "#plugins/workspace/types";
+export type { WorkspaceMcpPolicyUpdate } from "#app/workspace-config-access";
 
 export type {
   AgentAttachment,
@@ -73,6 +77,9 @@ export type {
   WorkspaceFile,
   WorkspaceInfo,
   WorkspaceSkill,
+  WorkspaceSkillSettings,
+  WorkspaceSkillSetting,
+  WorkspaceMcpSettings,
 };
 
 export interface ComputerPreviewView {

@@ -11,13 +11,19 @@ server.registerTool(
   {
     title: "Echo",
     description: "Echo the provided text back.",
-    inputSchema: z.object({ text: z.string() }),
+    inputSchema: z.object({
+      text: z.string(),
+      delayMs: z.number().int().positive().optional(),
+    }),
     outputSchema: z.object({ echoed: z.string() }),
   },
-  ({ text }) => ({
-    content: [{ type: "text", text: `echo:${text}` }],
-    structuredContent: { echoed: text },
-  }),
+  async ({ text, delayMs }) => {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return {
+      content: [{ type: "text", text: `echo:${text}` }],
+      structuredContent: { echoed: text },
+    };
+  },
 );
 
 const PNG_1X1 =

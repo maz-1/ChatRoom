@@ -39,6 +39,26 @@ Create a custom MCP app in ChatGPT Developer Mode, use the ChatRoom `/mcp` URL, 
 
 See [Use ChatRoom with ChatGPT](https://doc.chatroomcp.com/chatgpt) for the current ChatGPT setup flow.
 
+## Workspace MCP settings
+
+Open **Workspaces → Settings** in the WebUI to enable or disable individual bridged MCP servers for a project. Choose **Configure tools** to edit allowed/blocked tools and per-server tool timeouts, then save. Settings are stored in the workspace's `.codex/config.toml`:
+
+```toml
+[mcp_servers.example]
+enabled = false
+enabled_tools = ["search", "read"]
+disabled_tools = ["delete"]
+tool_timeout_sec = 120
+```
+
+Server names match `mcp.servers` in ChatRoom's global configuration. Missing settings default to enabled; global disables take precedence. Omit `enabled_tools` to allow all tools; an empty array allows none. `disabled_tools` is applied after the allowlist. These filters affect both discovery and calls. A per-call `timeoutMs` overrides workspace `tool_timeout_sec`, which overrides the global `mcp.callTimeoutMs`; clearing the workspace timeout restores inheritance. A timed-out call leaves shared server connections usable by other workspaces.
+
+Open **Workspaces → Skills** to enable or disable discovered skills. Overrides use `[[skills.config]]` entries (or an equivalent inline array) with `path` and `enabled`. Paths saved by the WebUI point to `SKILL.md` relative to the `.codex/` directory, for example `../.agents/skills/example/SKILL.md`. Absolute skill paths and skill-directory paths are also recognized. Disabled skills remain visible in the WebUI but are omitted from `workspace_info`. Restart existing Codex sessions to reload their skill configuration.
+
+Existing comments and unrelated configuration are preserved, and manual edits take effect on the next ChatRoom request. Workspace config does not import MCP server definitions or other Codex settings.
+
+For workspace operations, pass the workspace `root` to `mcp_list_servers`, `mcp_call`, and `mcp_refresh`. A disabled server exposes no tools and rejects calls for that root. Requests without `root` continue to use global settings, and other workspaces are unaffected.
+
 ## ChatRoom Cloud
 
 ChatRoom Cloud is built into ChatRoom and provides optional public access for Remote MCP and Remote WebUI. Open the **Cloud** page in the WebUI to purchase, restore, or manage access.

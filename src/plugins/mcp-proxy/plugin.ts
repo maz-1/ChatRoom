@@ -1,5 +1,6 @@
 import type { InternalPlugin } from "../types.js";
 import { createServiceToken } from "#app/service-registry";
+import { WorkspaceConfigAccessToken } from "#app/workspace-config-access";
 import {
   McpProxyService,
   type McpServerSettingStore,
@@ -21,6 +22,7 @@ export function createMcpProxyPlugin(
         context.config.mcp,
         context.events,
         settings,
+        context.services.require(WorkspaceConfigAccessToken),
       );
       context.services.provide(McpProxyServiceToken, service);
     },

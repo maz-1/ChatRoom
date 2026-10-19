@@ -5,6 +5,7 @@ import type {
   WorkspaceAccess,
   WorkspaceEntry,
   WorkspaceInfo,
+  WorkspaceSkillSettings,
 } from "#app/workspace-access";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import { WorkspaceRootPolicy } from "./workspace-root-policy.js";
@@ -16,13 +17,19 @@ import {
 } from "./metadata.js";
 import { WorkspaceFs } from "./workspace-fs.js";
 import type { WorkspaceBlacklistRepository } from "./workspace-blacklist-repository.js";
+import { normalizeRelativePath } from "#core/fs/safe-directory";
+import { WorkspaceConfigService } from "./workspace-config-service.js";
+import { skillConfigEnabled } from "./codex-skills-config.js";
 
 export class WorkspaceService implements WorkspaceAccess {
+  readonly config: WorkspaceConfigService;
   private constructor(
     private readonly rootsPolicy: WorkspaceRootPolicy,
     private readonly git: Pick<GitAccess, "projectFiles">,
     private readonly blacklist: WorkspaceBlacklistRepository,
-  ) {}
+  ) {
+    this.config = new WorkspaceConfigService((root) => this.fs(root));
+  }
 
   static async create(
     allowedRoots: string[],
@@ -185,20 +192,55 @@ export class WorkspaceService implements WorkspaceAccess {
     if (this.blacklist.has(root))
       throw new ChatRoomError("FORBIDDEN", "Workspace is blocked");
     const fs = await WorkspaceFs.create(root);
-    const [summary, presetPrompt, instructions, skills] = await Promise.all([
-      readSummary(fs),
-      readPresetPrompt(fs),
-      readInstructions(fs),
-      readSkills(fs),
-    ]);
+    const [summary, presetPrompt, instructions, skillSettings] =
+      await Promise.all([
+        readSummary(fs),
+        readPresetPrompt(fs),
+        readInstructions(fs),
+        this.skillSettings(root),
+      ]);
     return {
       root,
       name: path.basename(root),
       summary,
       presetPrompt,
       instructions,
-      skills,
+      skills: skillSettings.skills
+        .filter((skill) => skill.enabled)
+        .map(({ enabled: _enabled, ...skill }) => skill),
     };
+  }
+
+  async skillSettings(input: string): Promise<WorkspaceSkillSettings> {
+    const root = await this.resolve(input);
+    if (this.blacklist.has(root))
+      throw new ChatRoomError("FORBIDDEN", "Workspace is blocked");
+    const fs = await WorkspaceFs.create(root);
+    const [skills, config] = await Promise.all([
+      readSkills(fs),
+      this.config.read(root),
+    ]);
+    return {
+      root,
+      configPath: config.configPath,
+      skills: skills.map((skill) => ({
+        ...skill,
+        enabled: skillConfigEnabled(root, config.skillsConfig, skill.path),
+      })),
+    };
+  }
+
+  async setSkillEnabled(
+    input: string,
+    inputPath: string,
+    enabled: boolean,
+  ): Promise<WorkspaceSkillSettings> {
+    const skillPath = normalizeRelativePath(inputPath);
+    const settings = await this.skillSettings(input);
+    if (!settings.skills.some((skill) => skill.path === skillPath))
+      throw new ChatRoomError("NOT_FOUND", "Workspace skill not found");
+    await this.config.setSkillEnabled(settings.root, skillPath, enabled);
+    return this.skillSettings(settings.root);
   }
 
   async fs(input: string): Promise<WorkspaceFs> {

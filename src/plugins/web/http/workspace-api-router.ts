@@ -9,6 +9,7 @@ import {
   requireString,
 } from "#presentation/http/http-utils";
 import type { WebRuntime } from "#plugins/web/runtime";
+import { workspaceMcpUpdateSchema } from "#plugins/mcp-proxy/types";
 
 const MAX_WRITE_BYTES = 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -47,6 +48,97 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
   router.get("/workspace/roots", (_req, res) => {
     res.json(application.workspaces.roots());
   });
+
+  router.get(
+    "/workspace/skills",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await application.workspaces.skillSettings(
+          requireString(req.query.root, "root"),
+        ),
+      );
+    }),
+  );
+
+  router.patch(
+    "/workspace/skills",
+    asyncRoute(async (req, res) => {
+      const body = bodyRecord(req.body);
+      const root = requireString(body.root, "root");
+      const skillPath = requireString(body.path, "path");
+      if (typeof body.enabled !== "boolean")
+        throw new ChatRoomError("INVALID_INPUT", "enabled must be a boolean");
+      res.json(
+        await application.operations.run(
+          {
+            pluginId: "workspace",
+            source: "gui",
+            action: "skills.set-enabled",
+            input: { root, path: skillPath, enabled: body.enabled },
+          },
+          () =>
+            application.workspaces.setSkillEnabled(
+              root,
+              skillPath,
+              body.enabled as boolean,
+            ),
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    "/workspace/mcp/servers",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await application.mcpProxy.workspaceSettings(
+          requireString(req.query.root, "root"),
+        ),
+      );
+    }),
+  );
+
+  router.patch(
+    "/workspace/mcp/servers/:serverName",
+    asyncRoute(async (req, res) => {
+      const body = bodyRecord(req.body);
+      const root = requireString(body.root, "root");
+      const server = requireString(req.params.serverName, "serverName");
+      const { root: _root, ...fields } = body;
+      const update = workspaceMcpUpdateSchema.parse(fields);
+      if (Object.keys(update).length === 0)
+        throw new ChatRoomError(
+          "INVALID_INPUT",
+          "At least one MCP setting is required",
+        );
+      res.json(
+        await application.operations.run(
+          {
+            pluginId: "workspace",
+            source: "gui",
+            action:
+              Object.keys(update).length === 1 && update.enabled !== undefined
+                ? "mcp.set-enabled"
+                : "mcp.update-settings",
+            input: { root, server, ...update },
+          },
+          () => application.mcpProxy.setWorkspaceSettings(root, server, update),
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    "/workspace/mcp/servers/:serverName/tools",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await application.mcpProxy.workspaceTools(
+          requireString(req.query.root, "root"),
+          requireString(req.params.serverName, "serverName"),
+        ),
+      );
+    }),
+  );
 
   router.get("/workspace/blacklist", (_req, res) => {
     res.json(application.workspaces.blockedRoots());

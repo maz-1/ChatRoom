@@ -10,6 +10,7 @@ import WorkspaceFilesPane from "./WorkspaceFilesPane.vue";
 import WorkspaceGitPane from "./WorkspaceGitPane.vue";
 import WorkspacePromptPane from "./WorkspacePromptPane.vue";
 import WorkspaceSkillsPane from "./WorkspaceSkillsPane.vue";
+import WorkspaceSettingsPane from "./WorkspaceSettingsPane.vue";
 
 const items = shallowRef<WorkspaceEntry[]>([]);
 const allowedRoots = shallowRef<string[]>([]);
@@ -190,6 +191,9 @@ async function createProject(parent: string, name: string) {
           <v-tab value="skills">{{
             locale.t("$vuetify.chatroom.workspaces.skills")
           }}</v-tab>
+          <v-tab value="settings">{{
+            locale.t("$vuetify.chatroom.workspaces.settings")
+          }}</v-tab>
         </v-tabs>
         <v-divider />
 
@@ -205,6 +209,9 @@ async function createProject(parent: string, name: string) {
           </v-window-item>
           <v-window-item value="skills">
             <WorkspaceSkillsPane :root="selectedRoot" />
+          </v-window-item>
+          <v-window-item value="settings">
+            <WorkspaceSettingsPane :root="selectedRoot" />
           </v-window-item>
         </v-window>
       </template>

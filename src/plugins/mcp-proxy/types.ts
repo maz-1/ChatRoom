@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const workspaceRootSchema = z
+  .string()
+  .min(1)
+  .optional()
+  .describe(
+    "Workspace root from workspace_list. Pass it for workspace operations to apply .codex/config.toml MCP restrictions; omit for global access.",
+  );
+
 const toolSummarySchema = z.object({
   name: z.string(),
   title: z.string().nullable(),
@@ -19,6 +27,7 @@ const serverSummarySchema = z.object({
 });
 
 export const mcpListServersInputSchema = z.object({
+  root: workspaceRootSchema,
   server: z
     .string()
     .min(1)
@@ -37,6 +46,7 @@ export const mcpListServersOutputSchema = z.object({
 });
 
 export const mcpCallInputSchema = z.object({
+  root: workspaceRootSchema,
   server: z.string().min(1).describe("Configured server name."),
   tool: z
     .string()
@@ -54,7 +64,7 @@ export const mcpCallInputSchema = z.object({
     .positive()
     .optional()
     .describe(
-      "Optional per-call timeout; defaults to the configured mcp.callTimeoutMs.",
+      "Optional per-call timeout. Overrides the workspace server's tool_timeout_sec; otherwise defaults to mcp.callTimeoutMs.",
     ),
 });
 
@@ -69,6 +79,7 @@ export const mcpCallOutputSchema = z.object({
 });
 
 export const mcpRefreshInputSchema = z.object({
+  root: workspaceRootSchema,
   server: z
     .string()
     .min(1)
@@ -88,4 +99,43 @@ export type McpCallOutput = z.infer<typeof mcpCallOutputSchema>;
 /** WebUI projection of a configured server, including stdio diagnostics. */
 export interface McpServerDetail extends McpServerSummary {
   stderrTail: string;
+}
+
+export interface WorkspaceMcpServerSetting {
+  name: string;
+  type: "stdio" | "http";
+  enabled: boolean;
+  globallyEnabled: boolean;
+  effectiveEnabled: boolean;
+  enabledTools: string[] | null;
+  disabledTools: string[];
+  toolTimeoutSec: number | null;
+  effectiveToolTimeoutSec: number;
+}
+
+const toolNamesSchema = z.array(
+  z
+    .string()
+    .min(1)
+    .refine((name) => !!name.trim()),
+);
+export const workspaceMcpUpdateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    enabledTools: toolNamesSchema.nullable().optional(),
+    disabledTools: toolNamesSchema.nullable().optional(),
+    toolTimeoutSec: z
+      .number()
+      .min(0.001)
+      .max(2_147_483.647)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+export interface WorkspaceMcpSettings {
+  root: string;
+  configPath: string;
+  defaultToolTimeoutSec: number;
+  servers: WorkspaceMcpServerSetting[];
 }

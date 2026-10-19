@@ -620,6 +620,32 @@ export const enChatRoom = {
     prompt: "Prompt",
     files: "Files",
     skills: "Skills",
+    settings: "Settings",
+    mcpTitle: "Workspace MCP servers",
+    mcpHelp:
+      "Settings are stored in .codex/config.toml. Server switches save immediately; tool filters and timeouts require Save. Global disables take precedence.",
+    refreshSettings: "Refresh workspace settings",
+    mcpWorkspaceEnabled: "Enabled in this workspace",
+    mcpAvailable: "Enabled",
+    mcpWorkspaceDisabled: "Disabled in workspace",
+    mcpGloballyDisabled: "Globally disabled",
+    mcpConfigure: "Configure tools",
+    settingsSaved: "Workspace settings saved.",
+    mcpTimeout: "Tool timeout (seconds)",
+    mcpTimeoutHelp:
+      "Leave empty to inherit the global timeout ({0} seconds). An explicit timeout on an individual call takes precedence.",
+    mcpTimeoutInvalid:
+      "Enter a timeout between 0.001 and 2147483.647 seconds, or leave it empty.",
+    mcpLoadTools: "Load tool names",
+    mcpToolsHelp:
+      "Select discovered tool names or enter names manually. The blocked list takes precedence over the allowed list.",
+    mcpToolMode: "Tool access",
+    mcpAllTools: "All tools",
+    mcpSelectedTools: "Selected tools only",
+    mcpAllowedTools: "Allowed tools",
+    mcpBlockedTools: "Blocked tools",
+    mcpEmptyAllowlist:
+      "An empty selection disables every tool on this server in this workspace.",
     git: "Git",
     empty:
       "No visible workspaces. Create a workspace or restore one from the blacklist.",
@@ -719,6 +745,9 @@ export const enChatRoom = {
   },
   skills: {
     empty: "No discovered skills.",
+    settingsHelp:
+      "Changes are saved to .codex/config.toml. Disabled skills are omitted from ChatRoom's workspace context. Restart existing Codex sessions to reload their skill configuration.",
+    toggle: "Enable or disable skill {0}",
     noDescription: "No description provided in SKILL.md metadata.",
     sources: {
       agent: "Agent",

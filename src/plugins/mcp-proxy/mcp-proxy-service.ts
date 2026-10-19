@@ -1,5 +1,7 @@
 import {
   Client,
+  SdkError,
+  SdkErrorCode,
   StreamableHTTPClientTransport,
   type ContentBlock,
   type FetchLike,
@@ -16,11 +18,18 @@ import { createProxyDispatcher } from "#core/runtime/proxy-dispatcher";
 import { fetch as undiciFetch, type Dispatcher } from "undici";
 import type { RuntimeEventBus } from "#app/event-bus";
 import type {
+  WorkspaceConfig,
+  WorkspaceConfigAccess,
+  WorkspaceMcpPolicy,
+  WorkspaceMcpPolicyUpdate,
+} from "#app/workspace-config-access";
+import type {
   McpCallInput,
   McpCallOutput,
   McpServerDetail,
   McpServerSummary,
   McpToolSummary,
+  WorkspaceMcpSettings,
 } from "./types.js";
 
 const STDERR_TAIL_BYTES = 8 * 1024;
@@ -58,6 +67,7 @@ export class McpProxyService {
     private readonly config: McpConfig,
     private readonly events: RuntimeEventBus,
     private readonly store: McpServerSettingStore,
+    private readonly workspaces?: WorkspaceConfigAccess,
   ) {
     const disabled = new Set(store.disabledServers());
     for (const [name, serverConfig] of Object.entries(config.servers))
@@ -81,24 +91,28 @@ export class McpProxyService {
   }
 
   async list(options: {
+    root?: string | undefined;
     server?: string | undefined;
     includeSchemas: boolean;
   }): Promise<{ servers: McpServerSummary[] }> {
     const targets = this.resolve(options.server);
+    const workspace = await this.workspaceConfig(options.root);
     return {
       servers: await Promise.all(
-        targets.map((state) => this.describe(state, options.includeSchemas)),
+        targets.map((state) =>
+          this.describe(
+            state,
+            options.includeSchemas,
+            workspacePolicy(workspace, state.name),
+          ),
+        ),
       ),
     };
   }
 
   async call(input: McpCallInput): Promise<Omit<McpCallOutput, "operationId">> {
     const state = this.require(input.server);
-    if (!state.enabled)
-      throw new ChatRoomError(
-        "FORBIDDEN",
-        `MCP server "${state.name}" is disabled`,
-      );
+    const initialPolicy = await this.assertWorkspaceCall(input, state);
     try {
       await this.ensureConnected(state);
     } catch (error) {
@@ -114,10 +128,21 @@ export class McpProxyService {
       throw new ChatRoomError(
         "NOT_FOUND",
         `MCP server "${state.name}" has no tool "${input.tool}"`,
-        { availableTools: state.tools?.map((tool) => tool.name) ?? [] },
+        {
+          availableTools: (state.tools ?? [])
+            .filter((tool) => toolAllowed(initialPolicy, tool.name))
+            .map((tool) => tool.name),
+        },
       );
 
-    const timeoutMs = input.timeoutMs ?? this.config.callTimeoutMs;
+    // Re-read after connection/discovery so a workspace toggle takes effect
+    // before dispatching a call that was waiting for the upstream server.
+    const policy = await this.assertWorkspaceCall(input, state);
+    const timeoutMs =
+      input.timeoutMs ??
+      (policy?.toolTimeoutSec === undefined
+        ? this.config.callTimeoutMs
+        : Math.round(policy.toolTimeoutSec * 1000));
     let result;
     try {
       result = await client.callTool(
@@ -130,6 +155,16 @@ export class McpProxyService {
         { timeout: timeoutMs },
       );
     } catch (error) {
+      if (
+        error instanceof SdkError &&
+        error.code === SdkErrorCode.RequestTimeout
+      )
+        throw new ChatRoomError(
+          "PROCESS_FAILED",
+          `MCP tool "${input.tool}" on server "${state.name}" timed out after ${timeoutMs} ms`,
+          { server: state.name, tool: input.tool, timeoutMs },
+          { cause: error },
+        );
       this.invalidate(state, describeError(error));
       throw this.unavailable(state, error);
     }
@@ -165,10 +200,97 @@ export class McpProxyService {
 
   async refresh(
     serverName?: string | undefined,
+    root?: string | undefined,
   ): Promise<{ servers: McpServerSummary[] }> {
     const targets = this.resolve(serverName);
-    for (const state of targets) await this.close(state);
-    return await this.list({ server: serverName, includeSchemas: true });
+    const workspace = await this.workspaceConfig(root);
+    for (const state of targets)
+      if (workspacePolicy(workspace, state.name)?.enabled !== false)
+        await this.close(state);
+    return await this.list({ server: serverName, includeSchemas: true, root });
+  }
+
+  async workspaceSettings(root: string): Promise<WorkspaceMcpSettings> {
+    const config = await this.requireWorkspaces().read(root);
+    return {
+      root: config.root,
+      configPath: config.configPath,
+      defaultToolTimeoutSec: this.config.callTimeoutMs / 1000,
+      servers: [...this.servers.values()].map((state) => {
+        const policy = workspacePolicy(config, state.name);
+        return {
+          name: state.name,
+          type: state.config.type,
+          enabled: policy?.enabled !== false,
+          globallyEnabled: state.enabled,
+          effectiveEnabled: state.enabled && policy?.enabled !== false,
+          enabledTools: policy?.enabledTools ?? null,
+          disabledTools: policy?.disabledTools ?? [],
+          toolTimeoutSec: policy?.toolTimeoutSec ?? null,
+          effectiveToolTimeoutSec:
+            policy?.toolTimeoutSec ?? this.config.callTimeoutMs / 1000,
+        };
+      }),
+    };
+  }
+
+  async setWorkspaceEnabled(
+    root: string,
+    name: string,
+    enabled: boolean,
+  ): Promise<WorkspaceMcpSettings> {
+    return this.setWorkspaceSettings(root, name, { enabled });
+  }
+
+  async setWorkspaceSettings(
+    root: string,
+    name: string,
+    update: WorkspaceMcpPolicyUpdate,
+  ): Promise<WorkspaceMcpSettings> {
+    this.require(name);
+    await this.requireWorkspaces().setMcpSettings(root, name, update);
+    return this.workspaceSettings(root);
+  }
+
+  async workspaceTools(root: string, name: string): Promise<McpServerSummary> {
+    await this.requireWorkspaces().read(root);
+    return this.describe(this.require(name), false);
+  }
+
+  private requireWorkspaces(): WorkspaceConfigAccess {
+    if (!this.workspaces)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "Workspace configuration is unavailable",
+      );
+    return this.workspaces;
+  }
+
+  private async workspaceConfig(
+    root: string | undefined,
+  ): Promise<WorkspaceConfig | undefined> {
+    return root === undefined ? undefined : this.requireWorkspaces().read(root);
+  }
+
+  private async assertWorkspaceCall(
+    input: McpCallInput,
+    state: ServerState,
+  ): Promise<WorkspaceMcpPolicy | undefined> {
+    const policy = workspacePolicy(
+      await this.workspaceConfig(input.root),
+      state.name,
+    );
+    if (!state.enabled || policy?.enabled === false)
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        `MCP server "${state.name}" is disabled${policy?.enabled === false ? " in this workspace" : ""}`,
+      );
+    if (!toolAllowed(policy, input.tool))
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        `MCP tool "${input.tool}" on server "${state.name}" is disabled in this workspace`,
+      );
+    return policy;
   }
 
   async setEnabled(name: string, enabled: boolean): Promise<McpServerSummary> {
@@ -212,8 +334,9 @@ export class McpProxyService {
   private async describe(
     state: ServerState,
     includeSchemas: boolean,
+    policy?: WorkspaceMcpPolicy,
   ): Promise<McpServerSummary> {
-    if (!state.enabled)
+    if (!state.enabled || policy?.enabled === false)
       return {
         name: state.name,
         type: state.config.type,
@@ -232,7 +355,9 @@ export class McpProxyService {
         // The per-server failure is reported inline instead of failing the call.
       }
     }
-    const tools = state.tools ?? [];
+    const tools = (state.tools ?? []).filter((tool) =>
+      toolAllowed(policy, tool.name),
+    );
     return {
       name: state.name,
       type: state.config.type,
@@ -518,4 +643,24 @@ function describeError(error: unknown): string {
 function tailOf(value: string, maxBytes: number): string {
   if (Buffer.byteLength(value) <= maxBytes) return value;
   return value.slice(-maxBytes);
+}
+
+function workspacePolicy(
+  config: WorkspaceConfig | undefined,
+  name: string,
+): WorkspaceMcpPolicy | undefined {
+  return config && Object.hasOwn(config.mcpServers, name)
+    ? config.mcpServers[name]
+    : undefined;
+}
+
+function toolAllowed(
+  policy: WorkspaceMcpPolicy | undefined,
+  tool: string,
+): boolean {
+  return (
+    (policy?.enabledTools === undefined ||
+      policy.enabledTools.includes(tool)) &&
+    !policy?.disabledTools?.includes(tool)
+  );
 }
