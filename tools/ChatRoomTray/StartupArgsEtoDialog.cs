@@ -6,14 +6,16 @@ namespace ChatRoomTray;
 internal sealed class StartupArgsEtoDialog : Dialog<bool>
 {
     private readonly TextBox _argsBox;
+    private readonly TextBox _nodeArgsBox;
 
-    public StartupArgsEtoDialog(string initialValue)
+    public StartupArgsEtoDialog(string initialValue, string initialNodeArgs)
     {
         Title = "ChatRoom 启动参数";
-        ClientSize = new Size(620, 190);
+        MinimumSize = new Size(620, 0);
         Resizable = false;
 
         _argsBox = new TextBox { Text = initialValue ?? string.Empty };
+        _nodeArgsBox = new TextBox { Text = initialNodeArgs ?? string.Empty, PlaceholderText = "例如 --experimental-quic" };
 
         var ok = new Button { Text = "确定" };
         var cancel = new Button { Text = "取消" };
@@ -29,15 +31,17 @@ internal sealed class StartupArgsEtoDialog : Dialog<bool>
         };
         layout.AddRow(new Label
         {
-            Text = "启动 ChatRoom 时传给 Node.js CLI 的命令行参数。CLI 目前支持 init 和 serve；"
-                 + "留空表示无参数。端口、host 等运行参数请通过“编辑配置”修改后重启。",
+            Text = "分别设置 Node.js 运行时参数和 ChatRoom 命令，留空表示不传参数。"
+                 + "端口、host 等请通过“编辑配置”修改。保存后可立即重启 ChatRoom。",
             Wrap = WrapMode.Word,
         });
-        layout.AddRow(_argsBox);
-        layout.Add(null, yscale: true);
+        layout.AddRow(new Label { Text = "Node.js 参数", VerticalAlignment = VerticalAlignment.Center }, _nodeArgsBox);
+        layout.AddRow(new Label { Text = "ChatRoom 参数", VerticalAlignment = VerticalAlignment.Center }, _argsBox);
         layout.AddSeparateRow(null, cancel, ok);
         Content = layout;
     }
 
     public string Value => (_argsBox.Text ?? string.Empty).Trim();
+
+    public string NodeArgs => (_nodeArgsBox.Text ?? string.Empty).Trim();
 }

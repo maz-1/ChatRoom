@@ -119,6 +119,16 @@ A bundled `node` / `node.exe` in the same runtime root is preferred; otherwise t
 
 The existing `chatroom-tray.ini` format is kept. `[ChatRoom] Args` defaults to `serve`, and the INI reader/writer is now fully managed so it works on all three platforms.
 
+`[ChatRoom] NodeArgs` holds optional Node.js runtime flags and defaults to empty. The tray places these flags before the JavaScript entry point; `Args` follows the entry point. For example, with a QUIC-enabled Node.js build:
+
+```ini
+[ChatRoom]
+NodeArgs=--experimental-quic
+Args=serve
+```
+
+The tray's startup-arguments dialog edits both fields and offers to restart ChatRoom after saving. On Windows, `chatroom-tray.ini` is beside `ChatRoomTray.exe`; on Linux/macOS, it is beside the ChatRoom configuration file. Restart the tray host after editing the INI file directly.
+
 On Linux/macOS the tray host also registers SIGTERM/SIGINT cleanup. The tracked ChatRoom process tree is terminated before the operating system performs its normal signal termination, preventing an orphaned Node process.
 
 ## Icons

@@ -274,7 +274,8 @@ internal sealed class CrossPlatformTrayHost : IDisposable
                 _nodeExecutable,
                 _chatEntryPath,
                 _runtimeWorkingDirectory,
-                ParseStartupArguments(startupArgs));
+                ParseStartupArguments(startupArgs),
+                ParseStartupArguments(_settings.NodeArgs));
             _recentStartUtc = DateTime.UtcNow;
             _wasRunning = true;
             UpdateTray();
@@ -349,12 +350,12 @@ internal sealed class CrossPlatformTrayHost : IDisposable
 
     private void EditStartupArgs()
     {
-        using var dialog = new StartupArgsEtoDialog(_settings.Args);
+        using var dialog = new StartupArgsEtoDialog(_settings.Args, _settings.NodeArgs);
         if (!dialog.ShowModal()) return;
 
         try
         {
-            _settings.SaveArgs(dialog.Value);
+            _settings.SaveStartupArgs(dialog.Value, dialog.NodeArgs);
         }
         catch (Exception error)
         {
@@ -602,7 +603,8 @@ internal sealed class CrossPlatformTrayHost : IDisposable
         string executable,
         string entryPath,
         string workingDirectory,
-        IEnumerable<string> arguments)
+        IEnumerable<string> arguments,
+        IEnumerable<string>? nodeArguments = null)
     {
         var start = new ProcessStartInfo
         {
@@ -611,6 +613,9 @@ internal sealed class CrossPlatformTrayHost : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (nodeArguments is not null)
+            foreach (var argument in nodeArguments)
+                start.ArgumentList.Add(argument);
         start.ArgumentList.Add(entryPath);
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);

@@ -595,16 +595,30 @@ internal static class ConfigEditorCommands
             Check("js2ray 嵌套未知字段被识别", ConfigStore.Load(js2rayPath).UnknownKeys.Contains("js2ray.reverse.unknownOption"));
 
             var trayIni = Path.Combine(directory, "chatroom-tray.ini");
+            Check("TraySettings 默认不添加 Node 参数", new global::ChatRoomTray.TraySettings(trayIni).NodeArgs == string.Empty);
             File.WriteAllText(
                 trayIni,
-                "[Other]\nKeep=yes\n\n[ChatRoom]\nArgs=serve --old\n",
+                "[Other]\nKeep=yes\n\n[ChatRoom]\nNodeArgs=--experimental-quic\nArgs=serve --old\n",
                 new UTF8Encoding(false));
             var traySettings = new global::ChatRoomTray.TraySettings(trayIni);
             Check("TraySettings 读取已有启动参数", traySettings.Args == "serve --old", traySettings.Args);
+            Check("TraySettings 读取 Node 参数", traySettings.NodeArgs == "--experimental-quic", traySettings.NodeArgs);
             traySettings.SaveArgs("serve --port 9000");
             var trayReloaded = new global::ChatRoomTray.TraySettings(trayIni);
             var trayText = File.ReadAllText(trayIni);
             Check("TraySettings 写入后可读回", trayReloaded.Args == "serve --port 9000", trayReloaded.Args);
+            Check("TraySettings 修改应用参数时保留 Node 参数", trayReloaded.NodeArgs == "--experimental-quic", trayReloaded.NodeArgs);
+            traySettings.SaveStartupArgs("serve", "--experimental-quic --trace-warnings");
+            var startupReloaded = new global::ChatRoomTray.TraySettings(trayIni);
+            Check("TraySettings 两组参数一起保存并立即更新", traySettings.Args == "serve"
+                && traySettings.NodeArgs == "--experimental-quic --trace-warnings"
+                && startupReloaded.Args == traySettings.Args && startupReloaded.NodeArgs == traySettings.NodeArgs);
+            traySettings.SaveStartupArgs("serve", string.Empty);
+            Check("TraySettings 可清空 Node 参数", new global::ChatRoomTray.TraySettings(trayIni).NodeArgs == string.Empty);
+            var newTrayIni = Path.Combine(directory, "new-tray.ini");
+            new global::ChatRoomTray.TraySettings(newTrayIni).SaveStartupArgs("serve", "--experimental-quic");
+            var newTraySettings = new global::ChatRoomTray.TraySettings(newTrayIni);
+            Check("TraySettings 首次保存同时创建两组参数", newTraySettings.Args == "serve" && newTraySettings.NodeArgs == "--experimental-quic");
             Check(
                 "TraySettings 保留其他 INI section",
                 trayText.Contains("[Other]") && trayText.Contains("Keep=yes"));

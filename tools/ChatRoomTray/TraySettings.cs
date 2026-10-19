@@ -13,23 +13,43 @@ internal sealed class TraySettings
 {
     private const string Section = "ChatRoom";
     private const string ArgsKey = "Args";
+    private const string NodeArgsKey = "NodeArgs";
     private readonly string _path;
 
     public TraySettings(string path)
     {
         _path = path;
         Args = Read(ArgsKey, "serve");
+        NodeArgs = Read(NodeArgsKey, string.Empty);
     }
 
     public string Args { get; private set; }
 
+    public string NodeArgs { get; private set; }
+
     public void SaveArgs(string value)
     {
-        Args = value;
+        SaveStartupArgs(value, NodeArgs);
+    }
+
+    public void SaveStartupArgs(string args, string nodeArgs)
+    {
         var lines = File.Exists(_path)
             ? new List<string>(File.ReadAllLines(_path, Encoding.UTF8))
             : new List<string>();
 
+        UpdateValue(lines, ArgsKey, args);
+        UpdateValue(lines, NodeArgsKey, nodeArgs);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(_path));
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        File.WriteAllLines(_path, lines, new UTF8Encoding(false));
+        Args = args;
+        NodeArgs = nodeArgs;
+    }
+
+    private static void UpdateValue(List<string> lines, string key, string value)
+    {
         var sectionStart = -1;
         var sectionEnd = lines.Count;
         for (var index = 0; index < lines.Count; index++)
@@ -54,7 +74,7 @@ internal sealed class TraySettings
         {
             if (lines.Count > 0 && lines[lines.Count - 1].Length != 0) lines.Add(string.Empty);
             lines.Add("[" + Section + "]");
-            lines.Add(ArgsKey + "=" + value);
+            lines.Add(key + "=" + value);
         }
         else
         {
@@ -64,20 +84,16 @@ internal sealed class TraySettings
                 var line = lines[index];
                 var equals = line.IndexOf('=');
                 if (equals < 0) continue;
-                var key = line.Substring(0, equals).Trim();
-                if (!string.Equals(key, ArgsKey, StringComparison.OrdinalIgnoreCase)) continue;
+                var candidate = line.Substring(0, equals).Trim();
+                if (!string.Equals(candidate, key, StringComparison.OrdinalIgnoreCase)) continue;
 
-                lines[index] = ArgsKey + "=" + value;
+                lines[index] = key + "=" + value;
                 replaced = true;
                 break;
             }
 
-            if (!replaced) lines.Insert(sectionEnd, ArgsKey + "=" + value);
+            if (!replaced) lines.Insert(sectionEnd, key + "=" + value);
         }
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(_path));
-        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-        File.WriteAllLines(_path, lines, new UTF8Encoding(false));
     }
 
     private string Read(string key, string defaultValue)

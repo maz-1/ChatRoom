@@ -143,7 +143,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _process = StartHiddenConsoleProcess(
                 _nodePath,
-                BuildNodeArguments(_chatEntryPath, args),
+                BuildNodeArguments(_chatEntryPath, args, _settings.NodeArgs),
                 _appDir);
             _recentStartUtc = DateTime.UtcNow;
             _wasRunning = true;
@@ -212,10 +212,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private static string BuildNodeArguments(string entryPath, string args)
+    private static string BuildNodeArguments(string entryPath, string args, string nodeArgs)
     {
+        var prefix = string.IsNullOrWhiteSpace(nodeArgs) ? string.Empty : nodeArgs + " ";
         var suffix = string.IsNullOrWhiteSpace(args) ? string.Empty : " " + args;
-        return "\"" + entryPath + "\"" + suffix;
+        return prefix + "\"" + entryPath + "\"" + suffix;
     }
 
     private void StopChatRoom()
@@ -336,12 +337,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void EditStartupArgs()
     {
-        using var dialog = new StartupArgsDialog(_settings.Args) { Icon = (Icon)_appIcon.Clone() };
+        using var dialog = new StartupArgsDialog(_settings.Args, _settings.NodeArgs) { Icon = (Icon)_appIcon.Clone() };
         if (dialog.ShowDialog() != DialogResult.OK) return;
 
         try
         {
-            _settings.SaveArgs(dialog.Value);
+            _settings.SaveStartupArgs(dialog.Value, dialog.NodeArgs);
         }
         catch (Exception error)
         {
