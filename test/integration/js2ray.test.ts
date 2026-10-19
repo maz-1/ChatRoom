@@ -178,6 +178,33 @@ async function setup(t: TestContext, web = false) {
   return { runtime, portal, agent, request };
 }
 
+test("js2ray reverse closes completed HTTP sessions without cancellation warnings", async (t) => {
+  const { runtime, request } = await setup(t);
+  const cancellations: unknown[] = [];
+  t.after(
+    runtime.components.logs.subscribe((record) => {
+      if (record.module === "js2ray" && record.data?.code === "ERR_CANCELLED")
+        cancellations.push(record);
+    }),
+  );
+  for (let i = 0; i < 5; i++) {
+    const response = await request("/.well-known/oauth-authorization-server", {
+      headers: { connection: "close" },
+    });
+    assert.equal(response.status, 200);
+  }
+  const deadline = Date.now() + 3000;
+  while ((runtime.components.js2ray.status().reverse[0]?.sessions ?? 0) > 1) {
+    if (Date.now() >= deadline)
+      assert.fail("Completed reverse sessions did not close");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  await runtime.components.logs.flush();
+  assert.deepEqual(cancellations, []);
+  assert.equal(runtime.components.js2ray.status().reverse[0]?.active, 1);
+});
+
 test("js2ray reverse pins remote identity, completes OAuth/MCP and isolates MCP-only ingress", async (t) => {
   const { runtime, portal, request } = await setup(t);
   const metadata = await request("/.well-known/oauth-authorization-server", {
