@@ -11,6 +11,7 @@ import WorkspaceGitPane from "./WorkspaceGitPane.vue";
 import WorkspacePromptPane from "./WorkspacePromptPane.vue";
 import WorkspaceSkillsPane from "./WorkspaceSkillsPane.vue";
 import WorkspaceSettingsPane from "./WorkspaceSettingsPane.vue";
+import WorkspaceSelect from "./WorkspaceSelect.vue";
 
 const items = shallowRef<WorkspaceEntry[]>([]);
 const allowedRoots = shallowRef<string[]>([]);
@@ -108,11 +109,9 @@ async function createProject(parent: string, name: string) {
     <v-card class="workspace-detail panel-card">
       <div class="workspace-header">
         <div class="workspace-identity min-w-0">
-          <v-select
+          <WorkspaceSelect
             v-model="selectedRoot"
-            :items="
-              items.map((item) => ({ title: item.name, value: item.root }))
-            "
+            :items="items"
             :loading="loading"
             :aria-label="locale.t('$vuetify.chatroom.workspaces.workspace')"
             :disabled="blacklistBusy"

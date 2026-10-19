@@ -29,6 +29,7 @@ import {
 } from "../utils/agent-display.js";
 import { errorMessage } from "../utils/errors.js";
 import AgentSessionConfigFields from "./AgentSessionConfigFields.vue";
+import WorkspaceSelect from "./WorkspaceSelect.vue";
 
 const props = defineProps<{
   providers: AgentProviderStatus[];
@@ -206,11 +207,9 @@ function effortItems(value: AgentModel | null) {
 
 <template>
   <div class="agent-create">
-    <v-select
+    <WorkspaceSelect
       v-model="workspace"
       :items="workspaces"
-      item-title="name"
-      item-value="root"
       :label="locale.t('$vuetify.chatroom.agents.workspace')"
       density="compact"
       hide-details
